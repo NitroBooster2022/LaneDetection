@@ -1,0 +1,12 @@
+<launch>
+<arg name="show_lane"  default="False" doc="display lane detection window (True or False)"/>
+<arg name="print_lane"  default="False" doc="print lane detection (True or False)"/>
+<!-- <arg name="method"  default="histogram" doc="method for lane detection (histogram or houghlines)"/> -->
+
+<node pkg="LaneDetection" args="-s $(arg show_lane) -p $(arg print_lane)" name="lane" output="screen" type="lane" required="true"/>
+
+<!-- python lane-->
+<?ignore
+<node pkg="LaneDetection" args="--show $(arg show_lane) --method $(arg method)" name="lane" output="screen" type="lane.py" required="true"/>
+?>
+</launch>
