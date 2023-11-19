@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import rospy
 import cv2
 import numpy as np
@@ -6,6 +8,7 @@ from cv_bridge import CvBridge, CvBridgeError
 import matplotlib.pyplot as plt
 from pynput import keyboard
 import threading
+from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 
 # #-----Declare Global Variables ----- #
 CAMERA_PARAMS = {'fx': 554.3826904296875, 'fy': 554.3826904296875, 'cx': 320, 'cy': 240}
@@ -117,9 +120,19 @@ class laneDetectNode():
             self.cv_image = np.zeros((640, 480))
             rospy.init_node('LaneAttemptnod', anonymous=True)
             self.image_sub = rospy.Subscriber("/camera/image_raw", Image, self.callback)
+            self.waypoint_pub = rospy.Publisher("/lane/waypoints", Float32MultiArray, queue_size=3)
+            self.rate = rospy.Rate(15)
             rospy.spin()
 
         def callback(self,data):
+            waypoints = Float32MultiArray()
+            dimension = MultiArrayDimension()
+            dimension.label = "#ofwaypoints"
+            dimension.size = 5
+            waypoints.layout.dim = [dimension]
+            waypoints.data = [0.3, 0.3, 0.6, 0.6, 0.9, 0.9, 1.2, 1.2, 1.5, 1.5]
+            self.waypoint_pub.publish(waypoints)
+            return
             self.cv_image = self.bridge.imgmsg_to_cv2(data, "mono8")
             c_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
             roadImage = getIPM(self.cv_image)
@@ -134,5 +147,7 @@ class laneDetectNode():
 if __name__ == '__main__':
     try:
         nod = laneDetectNode()
+        nod.rate.sleep()
+        rospy.spin()
     except rospy.ROSInterruptException:
         pass
