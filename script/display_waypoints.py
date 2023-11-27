@@ -52,7 +52,6 @@ class WaypointNode():
         self.yaw = imu.yaw
 
 if __name__ == '__main__':
-    import rospy
     while not rospy.is_shutdown():
         try:
             node = WaypointNode()
