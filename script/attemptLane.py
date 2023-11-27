@@ -8,7 +8,8 @@ from cv_bridge import CvBridge, CvBridgeError
 import matplotlib.pyplot as plt
 from pynput import keyboard
 import threading
-from std_msgs.msg import Float32MultiArray, MultiArrayDimension
+from Line import Line
+from line_fit import line_fit, tune_fit, calc_curve, calc_vehicle_offset, final_viz, viz1, viz2, viz3
 
 # #-----Declare Global Variables ----- #
 CAMERA_PARAMS = {'fx': 554.3826904296875, 'fy': 554.3826904296875, 'cx': 320, 'cy': 240}
@@ -48,9 +49,12 @@ def getEdges(inputImage):
     imageHist = cv2.calcHist([inputImage], [0], None, [256], [0, 256])
     upperThresh = 128 + np.argmax(imageHist[128:256])
     lowerThresh = np.argmax(imageHist[0:127])
+    threshold_value = np.clip(np.max(inputImage) - 55, 30, 200)
+    _, binary_thresholded = cv2.threshold(inputImage, threshold_value, 255, cv2.THRESH_BINARY)
+
     # print(upperThresh,lowerThresh)
-    edgeImage =cv2.Canny(inputImage,lowerThresh,upperThresh,sobel_size,L2gradient = False)
-    return edgeImage
+    # edgeImage =cv2.Canny(inputImage,lowerThresh,upperThresh,sobel_size,L2gradient = False)
+    return binary_thresholded
 
 def plotPoints(pointArray):
     endpoints = pointArray[:, :, :2].reshape(-1, 2)
@@ -120,34 +124,74 @@ class laneDetectNode():
             self.cv_image = np.zeros((640, 480))
             rospy.init_node('LaneAttemptnod', anonymous=True)
             self.image_sub = rospy.Subscriber("/camera/image_raw", Image, self.callback)
-            self.waypoint_pub = rospy.Publisher("/lane/waypoints", Float32MultiArray, queue_size=3)
-            self.rate = rospy.Rate(15)
             rospy.spin()
 
         def callback(self,data):
-            waypoints = Float32MultiArray()
-            dimension = MultiArrayDimension()
-            dimension.label = "#ofwaypoints"
-            dimension.size = 5
-            waypoints.layout.dim = [dimension]
-            waypoints.data = [0.3, 0.3, 0.6, 0.6, 0.9, 0.9, 1.2, 1.2, 1.5, 1.5]
-            self.waypoint_pub.publish(waypoints)
-            return
             self.cv_image = self.bridge.imgmsg_to_cv2(data, "mono8")
             c_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
             roadImage = getIPM(self.cv_image)
-            roadImage = getEdges(roadImage)
-            lines = getLines(roadImage)
-            roadImage = displayLines(getIPM(c_image),lines)
-            # print("show img")
-            cv2.imshow('IPM- Edges',roadImage)
+            binary_warped = getEdges(roadImage)
+            cv2.imshow("Warped preview", binary_warped)
             key = cv2.waitKey(1)
+            window_size = 2  # how many frames for line smoothing
+            left_line = Line(n=window_size)
+            right_line = Line(n=window_size)
+            detected = False  # did the fast line fit detect the lines?
+                # Perform polynomial fit
+            if not detected:
+                # Slow line fit
+                ret = line_fit(binary_warped)
+                left_fit = ret['left_fit']
+                right_fit = ret['right_fit']
+                nonzerox = ret['nonzerox']
+                nonzeroy = ret['nonzeroy']
+                left_lane_inds = ret['left_lane_inds']
+                right_lane_inds = ret['right_lane_inds']
+
+                # Get moving average of line fit coefficients
+                left_fit = left_line.add_fit(left_fit)
+                right_fit = right_line.add_fit(right_fit)
+
+                # Calculate curvature
+                left_curve, right_curve = calc_curve(left_lane_inds, right_lane_inds, nonzerox, nonzeroy)
+
+                detected = True  # slow line fit always detects the line
+
+            else:  # implies detected == True
+                # Fast line fit
+                left_fit = left_line.get_fit()
+                right_fit = right_line.get_fit()
+                ret = tune_fit(binary_warped, left_fit, right_fit)
+                left_fit = ret['left_fit']
+                right_fit = ret['right_fit']
+                nonzerox = ret['nonzerox']
+                nonzeroy = ret['nonzeroy']
+                left_lane_inds = ret['left_lane_inds']
+                right_lane_inds = ret['right_lane_inds']
+
+                # Only make updates if we detected lines in current frame
+                if ret is not None:
+                    left_fit = ret['left_fit']
+                    right_fit = ret['right_fit']
+                    nonzerox = ret['nonzerox']
+                    nonzeroy = ret['nonzeroy']
+                    left_lane_inds = ret['left_lane_inds']
+                    right_lane_inds = ret['right_lane_inds']
+
+                    left_fit = left_line.add_fit(left_fit)
+                    right_fit = right_line.add_fit(right_fit)
+                    left_curve, right_curve = calc_curve(left_lane_inds, right_lane_inds, nonzerox, nonzeroy)
+                else:
+                    detected = False
+
+
+            # gyu_img = final_viz(self.cv_image, left_fit, right_fit, m_inv, left_curve, right_curve, vehicle_offset)
+            gyu_img = viz3(binary_warped, ret)
+            cv2.imshow("final preview", gyu_img)
         
         
 if __name__ == '__main__':
     try:
         nod = laneDetectNode()
-        nod.rate.sleep()
-        rospy.spin()
     except rospy.ROSInterruptException:
         pass
