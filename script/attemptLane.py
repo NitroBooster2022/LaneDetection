@@ -13,8 +13,8 @@ from line_fit import line_fit, tune_fit, calc_curve, calc_vehicle_offset, final_
 
 # #-----Declare Global Variables ----- #
 CAMERA_PARAMS = {'fx': 554.3826904296875, 'fy': 554.3826904296875, 'cx': 320, 'cy': 240}
-initial = np.float32([[0,360],
-                      [640,360],
+initial = np.float32([[0,300],
+                      [640,300],
                       [0,480],
                       [640,480]])
 
@@ -22,6 +22,9 @@ final = np.float32([[0,0],
                     [640,0],
                     [0,480],
                     [640,480]])
+
+transMatrix = cv2.getPerspectiveTransform(initial, final)
+# print(transMatrix)
 
 cameraMatrix = np.array([[CAMERA_PARAMS['fx'], 0, CAMERA_PARAMS['cx']],
                          [0, CAMERA_PARAMS['fy'], CAMERA_PARAMS['cy']],
@@ -39,8 +42,6 @@ edgeImage = []
 
 def getIPM(inputImage):
     undistortImage = cv2.undistort(inputImage, cameraMatrix, distCoeff)
-    transMatrix = cv2.getPerspectiveTransform(initial, final)
-    # print(transMatrix)
     dest_size = (inputImage.shape[1],inputImage.shape[0])
     inverseMap = cv2.warpPerspective(undistortImage, transMatrix, dest_size, flags=cv2.INTER_LINEAR)
     return inverseMap
@@ -122,9 +123,21 @@ class laneDetectNode():
             """
             self.bridge = CvBridge()
             self.cv_image = np.zeros((640, 480))
+            self.depth_image = np.zeros((640, 480))
+            self.normalized_depth_image = np.zeros((640, 480))
             rospy.init_node('LaneAttemptnod', anonymous=True)
             self.image_sub = rospy.Subscriber("/camera/image_raw", Image, self.callback)
+            # self.depth_sub = rospy.Subscriber("/camera/depth/image_raw", Image, self.depthcallback)
             rospy.spin()
+
+        def depthcallback(self,data):
+            self.depth_image = self.bridge.imgmsg_to_cv2(data, "32FC1")
+            min_val, max_val, _, _ = cv2.minMaxLoc(self.depth_image)
+            self.normalized_depth_image = cv2.convertScaleAbs(self.depth_image, alpha=255.0 / (max_val - min_val), beta=-min_val * 255.0 / (max_val - min_val))
+            # print(data.header)
+            # print(self.depth_image[479, 639])
+            # cv2.imshow("Depth", self.normalized_depth_image)
+            # key = cv2.waitKey(1)
 
         def callback(self,data):
             self.cv_image = self.bridge.imgmsg_to_cv2(data, "mono8")
