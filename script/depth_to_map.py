@@ -13,8 +13,8 @@ from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 
 # #-----Declare Global Variables ----- #
 CAMERA_PARAMS = {'fx': 554.3826904296875, 'fy': 554.3826904296875, 'cx': 320, 'cy': 240}
-initial = np.float32([[0,360],
-                      [640,360],
+initial = np.float32([[0,300],
+                      [640,300],
                       [0,480],
                       [640,480]])
 
@@ -43,18 +43,6 @@ def getIPM(inputImage):
     dest_size = (inputImage.shape[1],inputImage.shape[0])
     inverseMap = cv2.warpPerspective(undistortImage, transMatrix, dest_size, flags=cv2.INTER_LINEAR)
     return inverseMap
-
-def pixel_to_world(pixel_coord, depth):
-    # Pixel coordinates to camera coordinates
-    x_cam = (pixel_coord[0] - CAMERA_PARAMS['cx']) / CAMERA_PARAMS['fx']
-    y_cam = (pixel_coord[1] - CAMERA_PARAMS['cy']) / CAMERA_PARAMS['fy']
-
-    # Camera coordinates to world coordinates
-    x_world = x_cam * depth
-    y_world = y_cam * depth
-    z_world = depth
-
-    return x_world, y_world, z_world
 
 class laneDetectNode():
         
@@ -120,7 +108,7 @@ class laneDetectNode():
         wp2 = self.pixel_to_world(0,479)
         wp3 = self.pixel_to_world(639,0)
         wp4 = self.pixel_to_world(639,479)
-        waypoints.data = [wp1[1], wp1[0], wp2[1], wp2[0], wp3[1], wp3[0], wp4[1], wp4[0]]
+        waypoints.data = [wp1[1], -wp1[0], wp2[1], -wp2[0], wp3[1], -wp3[0], wp4[1], -wp4[0]]
         self.waypoint_pub.publish(waypoints)
 
     def pixel_to_world(self,x,y):

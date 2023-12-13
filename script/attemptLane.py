@@ -13,8 +13,8 @@ from line_fit import line_fit, tune_fit, calc_curve, calc_vehicle_offset, final_
 
 # #-----Declare Global Variables ----- #
 CAMERA_PARAMS = {'fx': 554.3826904296875, 'fy': 554.3826904296875, 'cx': 320, 'cy': 240}
-initial = np.float32([[0,360],
-                      [640,360],
+initial = np.float32([[0,300],
+                      [640,300],
                       [0,480],
                       [640,480]])
 
