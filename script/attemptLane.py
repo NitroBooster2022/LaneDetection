@@ -6,114 +6,86 @@ import numpy as np
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 import matplotlib.pyplot as plt
-from pynput import keyboard
-import threading
+import math
 from Line import Line
-from line_fit import line_fit, tune_fit, calc_curve, calc_vehicle_offset, final_viz, viz1, viz2, viz3
+from std_msgs.msg import Float32MultiArray, MultiArrayDimension
+from line_fit import line_fit, tune_fit, calc_curve, final_viz, viz1, viz2, viz3
 
 # #-----Declare Global Variables ----- #
-CAMERA_PARAMS = {'fx': 554.3826904296875, 'fy': 554.3826904296875, 'cx': 320, 'cy': 240}
+
+CAMERA_PARAMS = {'fx': 554.3826904296875, 'fy': 554.3826904296875, 'cx': 320, 'cy': 240} # Camera parameters - need to calibrate
+
+# Initial coordinates of input image
 initial = np.float32([[0,300],
                       [640,300],
                       [0,480],
                       [640,480]])
 
+# Where the initial coordinates will end up on the final image
 final = np.float32([[0,0],
                     [640,0],
                     [0,480],
                     [640,480]])
 
+# Compute the transformation matix
 transMatrix = cv2.getPerspectiveTransform(initial, final)
-# print(transMatrix)
 
+# Camera matrix for accurate IPM transform
 cameraMatrix = np.array([[CAMERA_PARAMS['fx'], 0, CAMERA_PARAMS['cx']],
                          [0, CAMERA_PARAMS['fy'], CAMERA_PARAMS['cy']],
                          [0, 0, 1]])
 
 distCoeff = np.array([])
-# dest_size = np.array([640,480])
-# undistortImage = None
-# inverseMap = None
-houghThresh = 5
-houghMin = 5
-houghMax = 5
-sobel_size = 3
-edgeImage = []
+
+# # ----- Declare global functions ------ # # 
 
 def getIPM(inputImage):
+    """
+    Calculate the inverse perspective transform of the input image
+
+    Parameters:
+    - input image
+    - Matrix with parameters of the camera
+    - Matrix with the desired perspective transform
+    Returns:
+     - Persepctive transformed image
+    """
     undistortImage = cv2.undistort(inputImage, cameraMatrix, distCoeff)
     dest_size = (inputImage.shape[1],inputImage.shape[0])
     inverseMap = cv2.warpPerspective(undistortImage, transMatrix, dest_size, flags=cv2.INTER_LINEAR)
     return inverseMap
 
-def getEdges(inputImage):
+def getLanes(inputImage):
+    """
+    Compute the lane lines of a given input image
+
+    Parameters:
+    - Input image to compute edges for
+    Returns:
+    - Binary image of lane lines
+    """ 
     imageHist = cv2.calcHist([inputImage], [0], None, [256], [0, 256])
-    upperThresh = 128 + np.argmax(imageHist[128:256])
-    lowerThresh = np.argmax(imageHist[0:127])
     threshold_value = np.clip(np.max(inputImage) - 55, 30, 200)
     _, binary_thresholded = cv2.threshold(inputImage, threshold_value, 255, cv2.THRESH_BINARY)
-
-    # print(upperThresh,lowerThresh)
-    # edgeImage =cv2.Canny(inputImage,lowerThresh,upperThresh,sobel_size,L2gradient = False)
     return binary_thresholded
 
-def plotPoints(pointArray):
-    endpoints = pointArray[:, :, :2].reshape(-1, 2)
+def getWaypoints(wayLines, y_Values):
+    """
+    Calculate the location of the waypoints
 
-    # Plot the endpoints using Matplotlib
-    plt.scatter(endpoints[:, 0], endpoints[:, 1], color='red', marker='o')
-    plt.title('Endpoints of Probabilistic Hough Transform Output')
-    plt.xlabel('X-axis')
-    plt.ylabel('Y-axis')
-    plt.gca().invert_yaxis()
-    plt.show()
+    Parameters:
+    - Array containing polynomial fits of left an right curves
+    - Array containing Y values to compute waypoints for
+    Returns:
+    - X coordinate location of waypoints
+    """  
+    wayPoint = np.zeros(len(y_Values))
+    for i in range(len(y_Values)):
+        x_right = wayLines['right_fit'][0] * y_Values[i]**2 + wayLines['right_fit'][1] * y_Values[i] + wayLines['right_fit'][2]
+        x_left = wayLines['left_fit'][0] * y_Values[i]**2 + wayLines['left_fit'][1] * y_Values[i] + wayLines['left_fit'][2]
+        wayPoint[i] = 0.5*(x_right + x_left)
+    return wayPoint
 
-def getLines(inputImage):
-    lines = cv2.HoughLinesP(inputImage,1,3.14/180,houghThresh,houghMin,houghMax)
-    return lines
-
-def displayLines(inputImage, lines):
-    # Draw lines on the image
-    # bgr_image = cv2.cvtColor(inputImage, cv2.COLOR_GRAY2BGR)
-    for line in lines:
-        x1, y1, x2, y2 = line[0]
-        cv2.line(inputImage, (x1, y1), (x2, y2), (0, 0, 255), 2)  # Draw a red line
-    return inputImage
-
-def on_key_press(key):
-    global houghThresh, houghMin, houghMax
-    try:
-        if key.char == '1':
-            houghThresh += 5
-            print(houghThresh)
-        elif key.char == '2':
-            houghThresh -= 5
-            print(houghThresh)
-        elif key.char == '3':
-            houghMin += 5
-            print(houghMin)
-        elif key.char == '4':
-            houghMin -= 5
-            print(houghMin)
-        elif key.char == '5':
-            houghMax += 5
-            print(houghMax)
-        elif key.char == '6':
-            houghMax -= 5
-            print(houghMax)   
-
-    except AttributeError:
-        print(f'Special key {key} pressed')
-
-def listen_for_keys():
-    with keyboard.Listener(on_press=on_key_press) as listener:
-        listener.join()
-
-# Create a separate thread for the listener
-listener_thread = threading.Thread(target=listen_for_keys)
-
-# Start the listener thread
-# listener_thread.start()
 
 class laneDetectNode():
         
@@ -127,6 +99,7 @@ class laneDetectNode():
             self.normalized_depth_image = np.zeros((640, 480))
             rospy.init_node('LaneAttemptnod', anonymous=True)
             self.image_sub = rospy.Subscriber("/camera/image_raw", Image, self.callback)
+            self.waypoint_pub = rospy.Publisher("/lane/waypoints", Float32MultiArray, queue_size=3)
             # self.depth_sub = rospy.Subscriber("/camera/depth/image_raw", Image, self.depthcallback)
             rospy.spin()
 
@@ -143,7 +116,7 @@ class laneDetectNode():
             self.cv_image = self.bridge.imgmsg_to_cv2(data, "mono8")
             c_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
             roadImage = getIPM(self.cv_image)
-            binary_warped = getEdges(roadImage)
+            binary_warped = getLanes(roadImage)
             cv2.imshow("Warped preview", binary_warped)
             key = cv2.waitKey(1)
             window_size = 2  # how many frames for line smoothing
@@ -197,11 +170,10 @@ class laneDetectNode():
                 else:
                     detected = False
 
-
-            # gyu_img = final_viz(self.cv_image, left_fit, right_fit, m_inv, left_curve, right_curve, vehicle_offset)
-            gyu_img = viz3(binary_warped, ret)
+            y_Values = np.array([0,50,100,150,200,250])
+            wayPoint = getWaypoints(ret,y_Values)
+            gyu_img = viz3(binary_warped, ret,wayPoint,y_Values)
             cv2.imshow("final preview", gyu_img)
-        
         
 if __name__ == '__main__':
     try:
