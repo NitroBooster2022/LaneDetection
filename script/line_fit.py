@@ -182,7 +182,7 @@ def viz1(binary_warped, ret, save_file=None):
 		plt.savefig(save_file)
 	plt.gcf().clear()
 
-def viz3(binary_warped, ret):
+def viz3(binary_warped, ret, waypoints, y_Values):
     """
     Visualize each sliding window location and predicted lane lines, on binary warped image
     """
@@ -207,6 +207,11 @@ def viz3(binary_warped, ret):
     # Draw the lane lines on the image
     result[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
     result[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
+    for i in range(len(y_Values)):
+        x = int(waypoints[i])
+        y = int(y_Values[i])
+        cv2.circle(result, (x, y), 5, (0, 255, 0), -1)  # Draw a filled green circle
+
     cv2.polylines(result, np.int32([np.column_stack((left_fitx, ploty))]), isClosed=False, color=(255, 255, 0), thickness=15)
     cv2.polylines(result, np.int32([np.column_stack((right_fitx, ploty))]), isClosed=False, color=(255, 255, 0), thickness=15)
 

@@ -7,7 +7,7 @@ import numpy as np
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 from cv_bridge import CvBridge, CvBridgeError
-from combined_thresh import combined_thresh
+from LaneDetection.script.trash.combined_thresh import combined_thresh
 import Line
 from line_fit import line_fit, tune_fit, calc_curve, calc_vehicle_offset, final_viz, viz1, viz2
 

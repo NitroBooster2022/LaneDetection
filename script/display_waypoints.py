@@ -9,7 +9,7 @@ import math
 # from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Float32MultiArray
 from gazebo_msgs.msg import ModelStates
-from utils.msg import IMU
+# from utils.msg import IMU
 
 # Waypoint displayer class: subscribe to "/lane/waypoints" and displays them
 class WaypointNode():
@@ -19,7 +19,7 @@ class WaypointNode():
         rospy.init_node('waypoint_node', anonymous=True)
         self.model_sub = rospy.Subscriber("/gazebo/model_states", ModelStates, self.callback, queue_size=3)
         self.waypoint_sub = rospy.Subscriber("/lane/waypoints", Float32MultiArray, self.callback_w, queue_size=3)
-        self.imu_sub = rospy.Subscriber("/automobile/IMU", IMU, self.callback_imu, queue_size=3)
+        # self.imu_sub = rospy.Subscriber("/automobile/IMU", IMU, self.callback_imu, queue_size=3)
         self.rate = rospy.Rate(15)
         self.p = Float32MultiArray()
         self.x = 0
