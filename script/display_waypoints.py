@@ -11,6 +11,7 @@ from std_msgs.msg import Float32MultiArray
 from gazebo_msgs.msg import ModelStates
 from utils.msg import IMU
 
+# Waypoint displayer class: subscribe to "/lane/waypoints" and displays them
 class WaypointNode():
     def __init__(self):
         self.map = cv2.imread(os.path.dirname(os.path.realpath(__file__))+'/templates/map.png')
@@ -35,6 +36,7 @@ class WaypointNode():
         self.x = model.pose[car_idx].position.x
         self.y = -model.pose[car_idx].position.y
 
+    # Draw the car's position and orientation on the map and the waypoints relative to it
     def callback_w(self, waypoints):
         img_map = np.copy(self.map)
         img_map = cv2.arrowedLine(img_map, (int(self.x/15*self.map.shape[0]),int(self.y/15*self.map.shape[1])),
