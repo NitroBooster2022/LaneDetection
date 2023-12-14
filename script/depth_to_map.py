@@ -5,14 +5,18 @@ import cv2
 import numpy as np
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
-import tf2_ros
-from geometry_msgs.msg import PointStamped
-from tf2_geometry_msgs import PointStamped as TF2PointStamped
+# import tf2_ros
+# from geometry_msgs.msg import PointStamped
+# from tf2_geometry_msgs import PointStamped as TF2PointStamped
 import math
 from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 
 # #-----Declare Global Variables ----- #
+
+# Camera params
 CAMERA_PARAMS = {'fx': 554.3826904296875, 'fy': 554.3826904296875, 'cx': 320, 'cy': 240}
+
+# IPM transform matrices
 initial = np.float32([[0,300],
                       [640,300],
                       [0,480],
@@ -24,6 +28,7 @@ final = np.float32([[0,0],
                     [640,480]])
 transMatrix = cv2.getPerspectiveTransform(initial, final)
 # print(transMatrix)
+
 cameraMatrix = np.array([[CAMERA_PARAMS['fx'], 0, CAMERA_PARAMS['cx']],
                          [0, CAMERA_PARAMS['fy'], CAMERA_PARAMS['cy']],
                          [0, 0, 1]])
@@ -32,11 +37,6 @@ distCoeff = np.array([])
 # dest_size = np.array([640,480])
 # undistortImage = None
 # inverseMap = None
-houghThresh = 5
-houghMin = 5
-houghMax = 5
-sobel_size = 3
-edgeImage = []
 
 def getIPM(inputImage):
     undistortImage = cv2.undistort(inputImage, cameraMatrix, distCoeff)
@@ -47,9 +47,6 @@ def getIPM(inputImage):
 class laneDetectNode():
         
     def __init__(self):
-        """
-        Creates a bridge for converting the image from Gazebo image intro OpenCv image
-        """
         self.bridge = CvBridge()
         self.cv_image = np.zeros((640, 480))
         self.depth_image = np.zeros((640, 480))
@@ -99,6 +96,7 @@ class laneDetectNode():
         c_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
         roadImage = getIPM(self.cv_image)
         # print(self.pixel_to_world(639,0))
+        # Publish waypoints corresponding to the IPM transformed image pixels
         waypoints = Float32MultiArray()
         dimension = MultiArrayDimension()
         dimension.label = "#ofwaypoints"
@@ -111,12 +109,16 @@ class laneDetectNode():
         waypoints.data = [wp1[1], -wp1[0], wp2[1], -wp2[0], wp3[1], -wp3[0], wp4[1], -wp4[0]]
         self.waypoint_pub.publish(waypoints)
 
+    # Convert IPM pixel coordinates to world coordinates (relative to camera)
+    # Depends on IPM tranform matrix and height and orientation of the camera
     def pixel_to_world(self,x,y):
+        height = 0.16
+        roll = 0.15
         original_pixel_coord = cv2.perspectiveTransform(np.array([[[x, y]]], dtype='float32'), np.linalg.inv(transMatrix))[0][0].astype(int)
         # print(original_pixel_coord)
         depth_value = self.depth_image[original_pixel_coord[1], original_pixel_coord[0]]/1000
-        map_y = math.sqrt(math.pow(depth_value,2)-math.pow(0.16,2))
-        map_x = (original_pixel_coord[0] - CAMERA_PARAMS['cx']) * depth_value / CAMERA_PARAMS['fx'] + 0.15 * depth_value
+        map_y = math.sqrt(math.pow(depth_value,2)-math.pow(height,2))
+        map_x = (original_pixel_coord[0] - CAMERA_PARAMS['cx']) * depth_value / CAMERA_PARAMS['fx'] + roll * depth_value
         return np.array([map_x,map_y])
 
 if __name__ == '__main__':
