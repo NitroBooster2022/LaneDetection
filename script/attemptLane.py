@@ -78,7 +78,7 @@ def getWaypoints(wayLines, y_Values):
     - Array containing Y values to compute waypoints for
     Returns:
     - X coordinate location of waypoints
-    """  
+    """
     wayPoint = np.zeros(len(y_Values))
     for i in range(len(y_Values)):
         x_right = wayLines['right_fit'][0] * y_Values[i]**2 + wayLines['right_fit'][1] * y_Values[i] + wayLines['right_fit'][2]
@@ -100,7 +100,7 @@ class laneDetectNode():
             rospy.init_node('LaneAttemptnod', anonymous=True)
             self.image_sub = rospy.Subscriber("/camera/image_raw", Image, self.callback)
             self.waypoint_pub = rospy.Publisher("/lane/waypoints", Float32MultiArray, queue_size=3)
-            # self.depth_sub = rospy.Subscriber("/camera/depth/image_raw", Image, self.depthcallback)
+            self.depth_sub = rospy.Subscriber("/camera/depth/image_raw", Image, self.depthcallback)
             rospy.spin()
 
         def depthcallback(self,data):
@@ -170,10 +170,36 @@ class laneDetectNode():
                 else:
                     detected = False
 
-            y_Values = np.array([0,50,100,150,200,250])
+            y_Values = np.array([10,50,100,150,200,250])
             wayPoint = getWaypoints(ret,y_Values)
             gyu_img = viz3(binary_warped, ret,wayPoint,y_Values)
             cv2.imshow("final preview", gyu_img)
+            # Publish waypoints corresponding to the IPM transformed image pixels
+            waypoints = Float32MultiArray()
+            dimension = MultiArrayDimension()
+            dimension.label = "#ofwaypoints"
+            dimension.size = 6
+            waypoints.layout.dim = [dimension]
+            wp1 = self.pixel_to_world(wayPoint[0],10)
+            wp2 = self.pixel_to_world(wayPoint[1],50)
+            wp3 = self.pixel_to_world(wayPoint[2],100)
+            wp4 = self.pixel_to_world(wayPoint[3],150)
+            wp5 = self.pixel_to_world(wayPoint[4],200)
+            wp6 = self.pixel_to_world(wayPoint[5],250)
+            waypoints.data = [wp1[1], -wp1[0], wp2[1], -wp2[0], wp3[1], -wp3[0], wp4[1], -wp4[0], wp5[1], -wp5[0], wp6[1], -wp6[0]]
+            self.waypoint_pub.publish(waypoints)
+
+        # Convert IPM pixel coordinates to world coordinates (relative to camera)
+        # Depends on IPM tranform matrix and height and orientation of the camera
+        def pixel_to_world(self,x,y):
+            height = 0.16
+            roll = 0.15
+            original_pixel_coord = cv2.perspectiveTransform(np.array([[[x, y]]], dtype='float32'), np.linalg.inv(transMatrix))[0][0].astype(int)
+            # print(original_pixel_coord)
+            depth_value = self.depth_image[original_pixel_coord[1], original_pixel_coord[0]]/1000
+            map_y = math.sqrt(math.pow(depth_value,2)-math.pow(height,2))
+            map_x = (original_pixel_coord[0] - CAMERA_PARAMS['cx']) * depth_value / CAMERA_PARAMS['fx'] + roll * depth_value
+            return np.array([map_x,map_y])
         
 if __name__ == '__main__':
     try:
