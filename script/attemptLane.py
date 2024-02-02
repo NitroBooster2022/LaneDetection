@@ -79,16 +79,29 @@ def getWaypoints(wayLines, y_Values):
     Returns:
     - X coordinate location of waypoints
     """
+    offset = 175
     wayPoint = np.zeros(len(y_Values))
-    for i in range(len(y_Values)):
-        x_right = wayLines['right_fit'][0] * y_Values[i]**2 + wayLines['right_fit'][1] * y_Values[i] + wayLines['right_fit'][2]
-        x_left = wayLines['left_fit'][0] * y_Values[i]**2 + wayLines['left_fit'][1] * y_Values[i] + wayLines['left_fit'][2]
-        wayPoint[i] = 0.5*(x_right + x_left)
+    if(wayLines['number_of_fits'] == '2'):
+        for i in range(len(y_Values)):
+            x_right = wayLines['right_fit'][0] * y_Values[i]**2 + wayLines['right_fit'][1] * y_Values[i] + wayLines['right_fit'][2]
+            x_left = wayLines['left_fit'][0] * y_Values[i]**2 + wayLines['left_fit'][1] * y_Values[i] + wayLines['left_fit'][2]
+            wayPoint[i] = 0.5*(x_right + x_left)
+    
+    if(wayLines['number_of_fits'] == 'left'):
+            for i in range(len(y_Values)):
+                wayPoint[i] = wayLines['left_fit'][0] * y_Values[i]**2 + wayLines['left_fit'][1] * y_Values[i] + wayLines['left_fit'][2] + offset
+
+    if(wayLines['number_of_fits'] == 'right'):
+            for i in range(len(y_Values)):
+                wayPoint[i] = wayLines['right_fit'][0] * y_Values[i]**2 + wayLines['right_fit'][1] * y_Values[i] + wayLines['right_fit'][2] - offset
+
+    if(wayLines['number_of_fits'] == '0'):
+            for i in range(len(y_Values)):
+                 wayPoint[i] = 320
+
     return wayPoint
-
-
 class laneDetectNode():
-        
+    
         def __init__(self):
             """
             Creates a bridge for converting the image from Gazebo image intro OpenCv image
@@ -100,7 +113,8 @@ class laneDetectNode():
             rospy.init_node('LaneAttemptnod', anonymous=True)
             self.image_sub = rospy.Subscriber("/camera/image_raw", Image, self.callback)
             self.waypoint_pub = rospy.Publisher("/lane/waypoints", Float32MultiArray, queue_size=3)
-            self.depth_sub = rospy.Subscriber("/camera/depth/image_raw", Image, self.depthcallback)
+            # self.depth_sub = rospy.Subscriber("/camera/depth/image_raw", Image, self.depthcallback)
+            self.detected = False  # did the fast line fit detect the lines?
             rospy.spin()
 
         def depthcallback(self,data):
@@ -122,9 +136,8 @@ class laneDetectNode():
             window_size = 2  # how many frames for line smoothing
             left_line = Line(n=window_size)
             right_line = Line(n=window_size)
-            detected = False  # did the fast line fit detect the lines?
                 # Perform polynomial fit
-            if not detected:
+            if not self.detected:
                 # Slow line fit
                 ret = line_fit(binary_warped)
                 left_fit = ret['left_fit']
@@ -141,7 +154,7 @@ class laneDetectNode():
                 # Calculate curvature
                 left_curve, right_curve = calc_curve(left_lane_inds, right_lane_inds, nonzerox, nonzeroy)
 
-                detected = True  # slow line fit always detects the line
+                self.detected = True  # slow line fit always detects the line
 
             else:  # implies detected == True
                 # Fast line fit
@@ -168,26 +181,26 @@ class laneDetectNode():
                     right_fit = right_line.add_fit(right_fit)
                     left_curve, right_curve = calc_curve(left_lane_inds, right_lane_inds, nonzerox, nonzeroy)
                 else:
-                    detected = False
+                    self.detected = False
 
             y_Values = np.array([10,50,100,150,200,250])
             wayPoint = getWaypoints(ret,y_Values)
             gyu_img = viz3(binary_warped, ret,wayPoint,y_Values)
             cv2.imshow("final preview", gyu_img)
             # Publish waypoints corresponding to the IPM transformed image pixels
-            waypoints = Float32MultiArray()
-            dimension = MultiArrayDimension()
-            dimension.label = "#ofwaypoints"
-            dimension.size = 6
-            waypoints.layout.dim = [dimension]
-            wp1 = self.pixel_to_world(wayPoint[0],10)
-            wp2 = self.pixel_to_world(wayPoint[1],50)
-            wp3 = self.pixel_to_world(wayPoint[2],100)
-            wp4 = self.pixel_to_world(wayPoint[3],150)
-            wp5 = self.pixel_to_world(wayPoint[4],200)
-            wp6 = self.pixel_to_world(wayPoint[5],250)
-            waypoints.data = [wp1[1], -wp1[0], wp2[1], -wp2[0], wp3[1], -wp3[0], wp4[1], -wp4[0], wp5[1], -wp5[0], wp6[1], -wp6[0]]
-            self.waypoint_pub.publish(waypoints)
+            # waypoints = Float32MultiArray()
+            # dimension = MultiArrayDimension()
+            # dimension.label = "#ofwaypoints"
+            # dimension.size = 6
+            # waypoints.layout.dim = [dimension]
+            # wp1 = self.pixel_to_world(wayPoint[0],10)
+            # wp2 = self.pixel_to_world(wayPoint[1],50)
+            # wp3 = self.pixel_to_world(wayPoint[2],100)
+            # wp4 = self.pixel_to_world(wayPoint[3],150)
+            # wp5 = self.pixel_to_world(wayPoint[4],200)
+            # wp6 = self.pixel_to_world(wayPoint[5],250)
+            # waypoints.data = [wp1[1], -wp1[0], wp2[1], -wp2[0], wp3[1], -wp3[0], wp4[1], -wp4[0], wp5[1], -wp5[0], wp6[1], -wp6[0]]
+            # self.waypoint_pub.publish(waypoints)
 
         # Convert IPM pixel coordinates to world coordinates (relative to camera)
         # Depends on IPM tranform matrix and height and orientation of the camera

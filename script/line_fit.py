@@ -4,6 +4,40 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import pickle
 
+lane_width =350
+
+def find_center_indices(hist, threshold):
+    # Find indices where histogram values are above the threshold
+    above_threshold = np.where(hist > threshold)[0]
+
+    # Find consecutive groups of five or more indices
+    consecutive_groups = np.split(above_threshold, np.where(np.diff(above_threshold) != 1)[0] + 1)
+
+    # Filter groups with five or more consecutive indices
+    valid_groups = [group for group in consecutive_groups if len(group) >= 5]
+
+    # Find the center index for each valid group
+    center_indices = [(group[0] + group[-1]) // 2 for group in valid_groups]
+
+    return center_indices
+
+def find_closest_pair(arr, myValue):
+    n = len(arr)
+    
+    if n < 2:
+        raise ValueError("Array must have at least two elements")
+
+    min_diff = np.inf
+    result_pair = (arr[0], arr[1])
+
+    for i in range(n - 1):
+        for j in range(i + 1, n):
+            current_diff = abs(arr[i] - arr[j])
+            if current_diff < min_diff:
+                min_diff = current_diff
+                result_pair = (arr[i], arr[j])
+
+    return result_pair
 
 def line_fit(binary_warped):
 	"""
@@ -17,22 +51,46 @@ def line_fit(binary_warped):
 	out_img = (np.dstack((binary_warped, binary_warped, binary_warped))*255).astype('uint8')
 	# Find the peak of the left and right halves of the histogram
 	# These will be the starting point for the left and right lines
-	midpoint = np.int(histogram.shape[0]/2)
+	# midpoint = np.int(histogram.shape[0]/2)
 	# leftx_base = np.argmax(histogram[0:midpoint])
 	# rightx_base = np.argmax(histogram[midpoint:]) + midpoint
 	# print(midpoint,leftx_base, rightx_base)
-	for i in range(640):
-		if histogram[i]>=1500:
-			leftx_base = i
-			break
-	for i in range(640):
-		if histogram[639-i]>=1500:
-			rightx_base = 639-i
-			break
+	# for i in range(640):
+	# 	if histogram[i]>=1500:
+	# 		leftx_base = i
+	# 		break
+	# for i in range(640):
+	# 	if histogram[639-i]>=1500:
+	# 		rightx_base = 639-i
+	# 		break
 	# print(midpoint,leftx_base, rightx_base)
 	# plt.plot(histogram)
 	# plt.show()
 	# Choose the number of sliding windows
+	threshold = 7000 # Magic number for constant discovered by Antoine in 2023 AD
+	indices = find_center_indices(histogram,threshold)
+	# print(indices)
+
+	if(len(indices) == 0):
+		ret = {}
+		ret['out_img'] = out_img
+		ret['number_of_fits'] = '0'
+		return ret
+	
+	if(len(indices) == 1):
+		ret = {}
+		if(indices[0] < 320):
+			ret['number_of_fits'] = 'left'
+		else:
+			ret['number_of_fits'] = 'right'
+		leftx_base = indices[0]
+		rightx_base = indices[0]
+
+	else:
+		ret = {}
+		(leftx_base, rightx_base) = find_closest_pair(indices,lane_width)
+		ret['number_of_fits'] = '2'
+
 	nwindows = 9
 	# Set height of windows
 	window_height = np.int(binary_warped.shape[0]//nwindows)
@@ -93,7 +151,6 @@ def line_fit(binary_warped):
 	right_fit = np.polyfit(righty, rightx, 2)
 
 	# Return a dict of relevant variables
-	ret = {}
 	ret['left_fit'] = left_fit
 	ret['right_fit'] = right_fit
 	ret['nonzerox'] = nonzerox
