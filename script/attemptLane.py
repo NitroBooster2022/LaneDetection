@@ -115,6 +115,7 @@ class laneDetectNode():
             self.waypoint_pub = rospy.Publisher("/lane/waypoints", Float32MultiArray, queue_size=3)
             # self.depth_sub = rospy.Subscriber("/camera/depth/image_raw", Image, self.depthcallback)
             self.detected = False  # did the fast line fit detect the lines?
+            self.refresh = 0       # Counter to refresh the line detection
             rospy.spin()
 
         def depthcallback(self,data):
@@ -138,50 +139,71 @@ class laneDetectNode():
             right_line = Line(n=window_size)
                 # Perform polynomial fit
             if not self.detected:
+                print('SLOW')
                 # Slow line fit
                 ret = line_fit(binary_warped)
-                left_fit = ret['left_fit']
-                right_fit = ret['right_fit']
-                nonzerox = ret['nonzerox']
-                nonzeroy = ret['nonzeroy']
-                left_lane_inds = ret['left_lane_inds']
-                right_lane_inds = ret['right_lane_inds']
+                left_fit = ret.get('left_fit', None)
+                right_fit = ret.get('right_fit', None)
+                nonzerox = ret.get('nonzerox', None)
+                nonzeroy = ret.get('nonzeroy', None)
+                left_lane_inds = ret.get('left_lane_inds', None)
+                right_lane_inds = ret.get('right_lane_inds', None)
 
-                # Get moving average of line fit coefficients
-                left_fit = left_line.add_fit(left_fit)
-                right_fit = right_line.add_fit(right_fit)
+                # Update values only if they are not None
+                if left_fit is not None:
+                    left_fit = left_line.add_fit(left_fit)
+                if right_fit is not None:
+                    right_fit = right_line.add_fit(right_fit)
+
+                # # Get moving average of line fit coefficients
+                # left_fit = left_line.add_fit(left_fit)
+                # right_fit = right_line.add_fit(right_fit)
 
                 # Calculate curvature
-                left_curve, right_curve = calc_curve(left_lane_inds, right_lane_inds, nonzerox, nonzeroy)
+                # left_curve, right_curve = calc_curve(left_lane_inds, right_lane_inds, nonzerox, nonzeroy)
 
                 self.detected = True  # slow line fit always detects the line
 
             else:  # implies detected == True
                 # Fast line fit
+                print('FAST')
                 left_fit = left_line.get_fit()
                 right_fit = right_line.get_fit()
                 ret = tune_fit(binary_warped, left_fit, right_fit)
-                left_fit = ret['left_fit']
-                right_fit = ret['right_fit']
-                nonzerox = ret['nonzerox']
-                nonzeroy = ret['nonzeroy']
-                left_lane_inds = ret['left_lane_inds']
-                right_lane_inds = ret['right_lane_inds']
+                # left_fit = ret['left_fit']
+                # right_fit = ret['right_fit']
+                # nonzerox = ret['nonzerox']
+                # nonzeroy = ret['nonzeroy']
+                # left_lane_inds = ret['left_lane_inds']
+                # right_lane_inds = ret['right_lane_inds']
 
                 # Only make updates if we detected lines in current frame
-                if ret is not None:
-                    left_fit = ret['left_fit']
-                    right_fit = ret['right_fit']
-                    nonzerox = ret['nonzerox']
-                    nonzeroy = ret['nonzeroy']
-                    left_lane_inds = ret['left_lane_inds']
-                    right_lane_inds = ret['right_lane_inds']
+            if ret is not None:
+                left_fit = ret.get('left_fit', None)
+                right_fit = ret.get('right_fit', None)
+                nonzerox = ret.get('nonzerox', None)
+                nonzeroy = ret.get('nonzeroy', None)
+                left_lane_inds = ret.get('left_lane_inds', None)
+                right_lane_inds = ret.get('right_lane_inds', None)
+                number_of_fits = ret['number_of_fits']
 
+                # Update values only if they are not None
+                if left_fit is not None:
                     left_fit = left_line.add_fit(left_fit)
+                # else: 
+                #     self.refresh +=1
+                if right_fit is not None:
                     right_fit = right_line.add_fit(right_fit)
-                    left_curve, right_curve = calc_curve(left_lane_inds, right_lane_inds, nonzerox, nonzeroy)
-                else:
-                    self.detected = False
+                # else: 
+                #     self.refresh +=1
+
+            # left_curve, right_curve = calc_curve(left_lane_inds, right_lane_inds, nonzerox, nonzeroy)
+            else:
+                self.detected = False
+            print(self.refresh)
+            # if (self.refresh >= 20):
+            #      self.reresh = 0
+            #      self.detected = False
 
             y_Values = np.array([10,50,100,150,200,250])
             wayPoint = getWaypoints(ret,y_Values)
