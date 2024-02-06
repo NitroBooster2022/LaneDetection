@@ -4,6 +4,60 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import pickle
 
+lane_width =350
+
+def find_center_indices(hist, threshold):
+    """
+    Function to find the center of the lanes detected in an image
+
+    Parameters:
+    - Array containing histogram of said image
+    - Threshold value for considered lane lines
+    Returns:
+    - array of center indices
+    """
+
+    # Find indices where histogram values are above the threshold
+    above_threshold = np.where(hist > threshold)[0]
+
+    # Find consecutive groups of five or more indices
+    consecutive_groups = np.split(above_threshold, np.where(np.diff(above_threshold) != 1)[0] + 1)
+
+    # Filter groups with five or more consecutive indices
+    valid_groups = [group for group in consecutive_groups if len(group) >= 5]
+
+    # Find the center index for each valid group
+    center_indices = [(group[0] + group[-1]) // 2 for group in valid_groups]
+
+    return center_indices
+
+def find_closest_pair(arr, myValue):
+	"""
+	Function to find the two lane markings which distance between them is most likely to be that of an actual lane marking
+
+	Parameters:
+	- Array containing values of different lane marking center
+	- Expected value of the distance between lane markings
+	Returns:
+	- Center indices of the lane markings
+	"""
+
+	n = len(arr)
+
+	if n < 2:
+		raise ValueError("Array must have at least two elements")
+
+	min_diff = np.inf
+	result_pair = (arr[0], arr[1])
+
+	for i in range(n - 1):
+		for j in range(i + 1, n):
+			current_diff = abs(arr[i] - arr[j])
+			if current_diff < min_diff:
+				min_diff = current_diff
+				result_pair = (arr[i], arr[j])
+
+	return result_pair
 
 def line_fit(binary_warped):
 	"""
@@ -17,22 +71,46 @@ def line_fit(binary_warped):
 	out_img = (np.dstack((binary_warped, binary_warped, binary_warped))*255).astype('uint8')
 	# Find the peak of the left and right halves of the histogram
 	# These will be the starting point for the left and right lines
-	midpoint = np.int(histogram.shape[0]/2)
+	# midpoint = np.int(histogram.shape[0]/2)
 	# leftx_base = np.argmax(histogram[0:midpoint])
 	# rightx_base = np.argmax(histogram[midpoint:]) + midpoint
 	# print(midpoint,leftx_base, rightx_base)
-	for i in range(640):
-		if histogram[i]>=1500:
-			leftx_base = i
-			break
-	for i in range(640):
-		if histogram[639-i]>=1500:
-			rightx_base = 639-i
-			break
+	# for i in range(640):
+	# 	if histogram[i]>=1500:
+	# 		leftx_base = i
+	# 		break
+	# for i in range(640):
+	# 	if histogram[639-i]>=1500:
+	# 		rightx_base = 639-i
+	# 		break
 	# print(midpoint,leftx_base, rightx_base)
 	# plt.plot(histogram)
 	# plt.show()
 	# Choose the number of sliding windows
+	threshold = 7000 # Magic number for constant discovered by Antoine in 2023 AD
+	indices = find_center_indices(histogram,threshold)
+	# print(indices)
+
+	if(len(indices) == 0): # If no lane markings are found
+		ret = {}
+		ret['out_img'] = out_img
+		ret['number_of_fits'] = '0'
+		return ret
+	
+	if(len(indices) == 1): # if only one lane marking is found
+		ret = {}
+		if(indices[0] < 320):	 # if lane marking is on the left side of the image
+			ret['number_of_fits'] = 'left'
+		else:					 # if lane marking is on the right side of the image
+			ret['number_of_fits'] = 'right'
+		leftx_base = indices[0]
+		rightx_base = indices[0]
+
+	else:						 # two or more lane markings found
+		ret = {}
+		(leftx_base, rightx_base) = find_closest_pair(indices,lane_width)
+		ret['number_of_fits'] = '2'
+
 	nwindows = 9
 	# Set height of windows
 	window_height = np.int(binary_warped.shape[0]//nwindows)
@@ -93,7 +171,6 @@ def line_fit(binary_warped):
 	right_fit = np.polyfit(righty, rightx, 2)
 
 	# Return a dict of relevant variables
-	ret = {}
 	ret['left_fit'] = left_fit
 	ret['right_fit'] = right_fit
 	ret['nonzerox'] = nonzerox
@@ -127,26 +204,37 @@ def tune_fit(binary_warped, left_fit, right_fit):
 
 	# If we don't find enough relevant points, return all None (this means error)
 	min_inds = 10
-	if lefty.shape[0] < min_inds or righty.shape[0] < min_inds:
-		return None
+	ret = {}
+	if lefty.shape[0] > min_inds:
+		# left_fit = np.polyfit(lefty, leftx, 2)
+		ret['number_of_fits'] = 'left'
 
+	if righty.shape[0] > min_inds:
+		# right_fit = np.polyfit(righty, rightx, 2)
+		ret['number_of_fits'] = 'right'
+
+	if lefty.shape[0] > min_inds and righty.shape[0] > min_inds:
+		ret['number_of_fits'] = '2'
+
+	if lefty.shape[0] < min_inds and righty.shape[0] < min_inds:
+		ret['number_of_fits'] = '0'
+		return ret
+	
 	# Fit a second order polynomial to each
 	left_fit = np.polyfit(lefty, leftx, 2)
 	right_fit = np.polyfit(righty, rightx, 2)
 	# Generate x and y values for plotting
-	ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
-	left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-	right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+	# ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
+	# left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
+	# right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
 
 	# Return a dict of relevant variables
-	ret = {}
 	ret['left_fit'] = left_fit
 	ret['right_fit'] = right_fit
 	ret['nonzerox'] = nonzerox
 	ret['nonzeroy'] = nonzeroy
 	ret['left_lane_inds'] = left_lane_inds
 	ret['right_lane_inds'] = right_lane_inds
-
 	return ret
 
 
@@ -183,39 +271,57 @@ def viz1(binary_warped, ret, save_file=None):
 	plt.gcf().clear()
 
 def viz3(binary_warped, ret, waypoints, y_Values):
-    """
-    Visualize each sliding window location and predicted lane lines, on binary warped image
-    """
-    # Grab variables from ret dictionary
-    left_fit = ret['left_fit']
-    right_fit = ret['right_fit']
-    nonzerox = ret['nonzerox']
-    nonzeroy = ret['nonzeroy']
-    out_img = ret['out_img']
-    left_lane_inds = ret['left_lane_inds']
-    right_lane_inds = ret['right_lane_inds']
+	"""
+	Visualize each sliding window location and predicted lane lines, on binary warped image
+	"""
+	# Grab variables from ret dictionary
+	if ret is not None:
+		left_fit = ret.get('left_fit', None)
+		right_fit = ret.get('right_fit', None)
+		nonzerox = ret.get('nonzerox', None)
+		nonzeroy = ret.get('nonzeroy', None)
+		left_lane_inds = ret.get('left_lane_inds', None)
+		right_lane_inds = ret.get('right_lane_inds', None)
 
-    # Generate x and y values for plotting
-    ploty = np.linspace(0, binary_warped.shape[0] - 1, binary_warped.shape[0])
-    left_fitx = left_fit[0] * ploty**2 + left_fit[1] * ploty + left_fit[2]
-    right_fitx = right_fit[0] * ploty**2 + right_fit[1] * ploty + right_fit[2]
+		# Generate x and y values for plotting
+		ploty = np.linspace(0, binary_warped.shape[0] - 1, binary_warped.shape[0])
 
-    # Create an empty image
-    img_shape = (binary_warped.shape[0], binary_warped.shape[1], 3)
-    result = np.zeros(img_shape, dtype=np.uint8)
+		# Create an empty image
+		img_shape = (binary_warped.shape[0], binary_warped.shape[1], 3)
+		result = np.zeros(img_shape, dtype=np.uint8)
 
-    # Draw the lane lines on the image
-    result[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
-    result[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
-    for i in range(len(y_Values)):
-        x = int(waypoints[i])
-        y = int(y_Values[i])
-        cv2.circle(result, (x, y), 5, (0, 255, 0), -1)  # Draw a filled green circle
+		# Update values only if they are not None
+		if left_fit is not None:
+			left_fitx = left_fit[0] * ploty**2 + left_fit[1] * ploty + left_fit[2]
+		else:
+			left_fitx = None
+		if right_fit is not None:
+			right_fitx = right_fit[0] * ploty**2 + right_fit[1] * ploty + right_fit[2]
+		else:
+			right_fitx = None
 
-    cv2.polylines(result, np.int32([np.column_stack((left_fitx, ploty))]), isClosed=False, color=(255, 255, 0), thickness=15)
-    cv2.polylines(result, np.int32([np.column_stack((right_fitx, ploty))]), isClosed=False, color=(255, 255, 0), thickness=15)
+	else:
+		return None;
 
-    return result
+	# Draw the lane lines on the image
+	if left_lane_inds is not None:
+		result[nonzeroy[left_lane_inds]]= [0, 0, 0]
+		result[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [0, 0, 0]
+	if right_lane_inds is not None:
+		result[nonzeroy[right_lane_inds]]= [0, 0, 0]
+		result[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 0]
+
+	for i in range(len(y_Values)):
+		x = int(waypoints[i])
+		y = int(y_Values[i])
+		cv2.circle(result, (x, y), 5, (0, 255, 0), -1)  # Draw a filled green circle
+
+	if left_fitx is not None:
+		cv2.polylines(result, np.int32([np.column_stack((left_fitx, ploty))]), isClosed=False, color=(255, 255, 0), thickness=15)
+	if right_fitx is not None:
+		cv2.polylines(result, np.int32([np.column_stack((right_fitx, ploty))]), isClosed=False, color=(255, 255, 0), thickness=15)
+
+	return result
 
 def viz2(binary_warped, ret, save_file=None):
 	"""
