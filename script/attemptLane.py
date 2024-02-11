@@ -10,6 +10,7 @@ import math
 from Line import Line
 from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 from line_fit import line_fit, tune_fit, calc_curve, final_viz, viz1, viz2, viz3
+import timeit
 
 # #-----Declare Global Variables ----- #
 
@@ -137,7 +138,6 @@ class laneDetectNode():
 
         def slow_detect(self, event):
             self.detected = False
-            rospy.loginfo("Timer callback triggered at {}".format(rospy.get_time()))
 
         def depthcallback(self,data):
             self.depth_image = self.bridge.imgmsg_to_cv2(data, "32FC1")
@@ -158,6 +158,7 @@ class laneDetectNode():
                 # Perform polynomial fit
             if not self.detected:
                 print('SLOW')
+                t1 = timeit.default_timer()
                 # Slow line fit
                 ret = line_fit(binary_warped)
                 left_fit = ret.get('left_fit', None)
@@ -222,7 +223,7 @@ class laneDetectNode():
             # if (self.refresh >= 20):
             #      self.reresh = 0
             #      self.detected = False
-
+            
             y_Values = np.array([10,50,100,150,200,250])
             wayPoint = getWaypoints(ret,y_Values)
             gyu_img = viz3(binary_warped, ret,wayPoint,y_Values)
@@ -241,6 +242,7 @@ class laneDetectNode():
             wp6 = self.pixel_to_world(wayPoint[5],250)
             waypoints.data = [wp1[1], -wp1[0], wp2[1], -wp2[0], wp3[1], -wp3[0], wp4[1], -wp4[0], wp5[1], -wp5[0], wp6[1], -wp6[0]]
             self.waypoint_pub.publish(waypoints)
+            rospy.loginfo(timeit.default_timer()-t1)
 
         # Convert IPM pixel coordinates to world coordinates (relative to camera)
         # Depends on IPM tranform matrix and height and orientation of the camera
