@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import math
 from Line import Line
 from std_msgs.msg import Float32MultiArray, MultiArrayDimension
-from line_fit import line_fit, tune_fit, calc_curve, final_viz, viz1, viz2, viz3
+from line_fit import line_fit, tune_fit, viz3
 import timeit
 
 # #-----Declare Global Variables ----- #
@@ -83,8 +83,9 @@ def getWaypoints(wayLines, y_Values):
     """
     offset = 175
     wayPoint = np.zeros(len(y_Values))
-    if(wayLines['number_of_fits'] == '2'):
-        for i in range(len(y_Values)):
+    # print(wayLines['number_of_fits'])
+    # if(wayLines['number_of_fits'] == '2'):
+    for i in range(len(y_Values)):
             x_right = wayLines['right_fit'][0] * y_Values[i]**2 + wayLines['right_fit'][1] * y_Values[i] + wayLines['right_fit'][2]
             x_left = wayLines['left_fit'][0] * y_Values[i]**2 + wayLines['left_fit'][1] * y_Values[i] + wayLines['left_fit'][2]
             wayPoint[i] = 0.5*(x_right + x_left)
@@ -125,20 +126,20 @@ class laneDetectNode():
             self.depth_image = np.zeros((640, 480))
             self.normalized_depth_image = np.zeros((640, 480))
             rospy.init_node('LaneAttemptnod', anonymous=True)
-            self.image_sub = rospy.Subscriber("/camera/image_raw", Image, self.callback)
+            self.image_sub = rospy.Subscriber("/camera/color/image_raw", Image, self.callback)
             self.waypoint_pub = rospy.Publisher("/lane/waypoints", Float32MultiArray, queue_size=3)
-            self.depth_sub = rospy.Subscriber("/camera/depth/image_raw", Image, self.depthcallback)
+            self.depth_sub = rospy.Subscriber("/camera/depth/image_rect_raw", Image, self.depthcallback)
             self.detected = False  # did the fast line fit detect the lines?
             window_size = 2  # how many frames for line smoothing
             self.left_line = Line(n=window_size)
             self.right_line = Line(n=window_size)
+            self.stop_line = False
             # self.refresh = 0       # Counter to refresh the line detection
             # self.refresh = rospy.Timer(rospy.Duration(1), self.slow_detect)
             rospy.spin()
 
         def slow_detect(self, event):
             self.detected = False
-
         def depthcallback(self,data):
             self.depth_image = self.bridge.imgmsg_to_cv2(data, "32FC1")
             min_val, max_val, _, _ = cv2.minMaxLoc(self.depth_image)
@@ -157,12 +158,13 @@ class laneDetectNode():
             key = cv2.waitKey(1)
                 # Perform polynomial fit
             if not self.detected:
-                print('SLOW')
+                # print('SLOW')
                 t1 = timeit.default_timer()
                 # Slow line fit
                 ret = line_fit(binary_warped)
                 left_fit = ret.get('left_fit', None)
                 right_fit = ret.get('right_fit', None)
+                self.stop_line = ret['stop_line']
                 nonzerox = ret.get('nonzerox', None)
                 nonzeroy = ret.get('nonzeroy', None)
                 left_lane_inds = ret.get('left_lane_inds', None)
@@ -185,10 +187,10 @@ class laneDetectNode():
 
             else:  # implies detected == True
                 # Fast line fit
-                print('FAST')
+                # print('FAST')
                 left_fit = self.left_line.get_fit()
                 right_fit = self.right_line.get_fit()
-                ret = tune_fit(binary_warped, left_fit, right_fit)
+                ret = tune_fit(binary_warped, left_fit, right_fit,self.stop_line)
                 # left_fit = ret['left_fit']
                 # right_fit = ret['right_fit']
                 # nonzerox = ret['nonzerox']
@@ -223,26 +225,27 @@ class laneDetectNode():
             # if (self.refresh >= 20):
             #      self.reresh = 0
             #      self.detected = False
-            
+            # print(ret)
             y_Values = np.array([10,50,100,150,200,250])
             wayPoint = getWaypoints(ret,y_Values)
             gyu_img = viz3(binary_warped, ret,wayPoint,y_Values)
-            cv2.imshow("final preview", gyu_img)
+            cv2.imshow("final preview", gyu_img)       # binary_warped = getLanes(roadImage)
+            # cv2.imshow("Warped preview", binary_warped)
             # Publish waypoints corresponding to the IPM transformed image pixels
             waypoints = Float32MultiArray()
             dimension = MultiArrayDimension()
             dimension.label = "#ofwaypoints"
             dimension.size = 6
             waypoints.layout.dim = [dimension]
-            wp1 = self.pixel_to_world(wayPoint[0],10)
-            wp2 = self.pixel_to_world(wayPoint[1],50)
-            wp3 = self.pixel_to_world(wayPoint[2],100)
-            wp4 = self.pixel_to_world(wayPoint[3],150)
-            wp5 = self.pixel_to_world(wayPoint[4],200)
-            wp6 = self.pixel_to_world(wayPoint[5],250)
-            waypoints.data = [wp1[1], -wp1[0], wp2[1], -wp2[0], wp3[1], -wp3[0], wp4[1], -wp4[0], wp5[1], -wp5[0], wp6[1], -wp6[0]]
-            self.waypoint_pub.publish(waypoints)
-            rospy.loginfo(timeit.default_timer()-t1)
+            # wp1 = self.pixel_to_world(wayPoint[0],10)
+            # wp2 = self.pixel_to_world(wayPoint[1],50)
+            # wp3 = self.pixel_to_world(wayPoint[2],100)
+            # wp4 = self.pixel_to_world(wayPoint[3],150)
+            # wp5 = self.pixel_to_world(wayPoint[4],200)
+            # wp6 = self.pixel_to_world(wayPoint[5],250)
+            # waypoints.data = [wp1[1], -wp1[0], wp2[1], -wp2[0], wp3[1], -wp3[0], wp4[1], -wp4[0], wp5[1], -wp5[0], wp6[1], -wp6[0]]
+            # self.waypoint_pub.publish(waypoints)
+            # print(timeit.default_timer()-t1)
 
         # Convert IPM pixel coordinates to world coordinates (relative to camera)
         # Depends on IPM tranform matrix and height and orientation of the camera
