@@ -10,31 +10,33 @@ import math
 from std_msgs.msg import Float32MultiArray
 from gazebo_msgs.msg import ModelStates
 from utils.msg import IMU
+import argparse
 
 # Waypoint displayer class: subscribe to "/lane/waypoints" and displays them
 class WaypointNode():
-    def __init__(self):
+    def __init__(self, ns = "automobile"):
         self.map = cv2.imread(os.path.dirname(os.path.realpath(__file__))+'/templates/map.png')
         print("init display waypoint node")
         rospy.init_node('waypoint_node', anonymous=True)
         self.model_sub = rospy.Subscriber("/gazebo/model_states", ModelStates, self.callback, queue_size=3)
         self.waypoint_sub = rospy.Subscriber("/lane/waypoints", Float32MultiArray, self.callback_w, queue_size=3)
-        self.imu_sub = rospy.Subscriber("/automobile/IMU", IMU, self.callback_imu, queue_size=3)
+        self.imu_sub = rospy.Subscriber("/"+ns+"/IMU", IMU, self.callback_imu, queue_size=3)
         self.rate = rospy.Rate(15)
         self.p = Float32MultiArray()
         self.x = 0
         self.y = 0
         self.yaw = 0
+        self.ns = ns
 
     def callback(self, model):
         try:
-            car_idx = model.name.index("automobile")
+            car_idx = model.name.index(self.ns)
         except ValueError:
-            print("Can't find automobile in modelstates")
+            print("Can't find "+self.ns+" in modelstates")
             return
 
         self.x = model.pose[car_idx].position.x
-        self.y = -model.pose[car_idx].position.y
+        self.y = 14-model.pose[car_idx].position.y
 
     # Draw the car's position and orientation on the map and the waypoints relative to it
     def callback_w(self, waypoints):
@@ -54,9 +56,12 @@ class WaypointNode():
         self.yaw = imu.yaw
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--ns", type=str, default="automobile", help="namespace name")
+    args = parser.parse_args()
     while not rospy.is_shutdown():
         try:
-            node = WaypointNode()
+            node = WaypointNode(args.ns)
             node.rate.sleep()
             rospy.spin()
         except rospy.ROSInterruptException:

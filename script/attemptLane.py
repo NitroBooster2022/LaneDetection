@@ -128,7 +128,7 @@ class laneDetectNode():
             rospy.init_node('LaneAttemptnod', anonymous=True)
             self.image_sub = rospy.Subscriber("/camera/color/image_raw", Image, self.callback)
             self.waypoint_pub = rospy.Publisher("/lane/waypoints", Float32MultiArray, queue_size=3)
-            self.depth_sub = rospy.Subscriber("/camera/depth/image_rect_raw", Image, self.depthcallback)
+            self.depth_sub = rospy.Subscriber("/camera/depth/image_raw", Image, self.depthcallback)
             self.detected = False  # did the fast line fit detect the lines?
             window_size = 2  # how many frames for line smoothing
             self.left_line = Line(n=window_size)
@@ -237,14 +237,15 @@ class laneDetectNode():
             dimension.label = "#ofwaypoints"
             dimension.size = 6
             waypoints.layout.dim = [dimension]
-            # wp1 = self.pixel_to_world(wayPoint[0],10)
-            # wp2 = self.pixel_to_world(wayPoint[1],50)
-            # wp3 = self.pixel_to_world(wayPoint[2],100)
-            # wp4 = self.pixel_to_world(wayPoint[3],150)
-            # wp5 = self.pixel_to_world(wayPoint[4],200)
-            # wp6 = self.pixel_to_world(wayPoint[5],250)
-            # waypoints.data = [wp1[1], -wp1[0], wp2[1], -wp2[0], wp3[1], -wp3[0], wp4[1], -wp4[0], wp5[1], -wp5[0], wp6[1], -wp6[0]]
-            # self.waypoint_pub.publish(waypoints)
+            # print(wayPoint)
+            wp1 = self.pixel_to_world(wayPoint[0],10)
+            wp2 = self.pixel_to_world(wayPoint[1],50)
+            wp3 = self.pixel_to_world(wayPoint[2],100)
+            wp4 = self.pixel_to_world(wayPoint[3],150)
+            wp5 = self.pixel_to_world(wayPoint[4],200)
+            wp6 = self.pixel_to_world(wayPoint[5],250)
+            waypoints.data = [wp1[1], -wp1[0], wp2[1], -wp2[0], wp3[1], -wp3[0], wp4[1], -wp4[0], wp5[1], -wp5[0], wp6[1], -wp6[0]]
+            self.waypoint_pub.publish(waypoints)
             # print(timeit.default_timer()-t1)
 
         # Convert IPM pixel coordinates to world coordinates (relative to camera)
