@@ -84,32 +84,23 @@ def getWaypoints(wayLines, y_Values):
     offset = 175
     wayPoint = np.zeros(len(y_Values))
     # print(wayLines['number_of_fits'])
-    # if(wayLines['number_of_fits'] == '2'):
-    for i in range(len(y_Values)):
-            x_right = wayLines['right_fit'][0] * y_Values[i]**2 + wayLines['right_fit'][1] * y_Values[i] + wayLines['right_fit'][2]
-            x_left = wayLines['left_fit'][0] * y_Values[i]**2 + wayLines['left_fit'][1] * y_Values[i] + wayLines['left_fit'][2]
-            wayPoint[i] = 0.5*(x_right + x_left)
-            # if(wayPoint[i] < 0):
-            #      wayPoint[i] = 0
-            # elif(wayPoint[i] > 640):
-            #      wayPoint = 640     
+    if(wayLines['number_of_fits'] == '2'):
+        for i in range(len(y_Values)):
+                x_right = wayLines['right_fit'][0] * y_Values[i]**2 + wayLines['right_fit'][1] * y_Values[i] + wayLines['right_fit'][2]
+                x_left = wayLines['left_fit'][0] * y_Values[i]**2 + wayLines['left_fit'][1] * y_Values[i] + wayLines['left_fit'][2]
+                wayPoint[i] = 0.5*(x_right + x_left)
+                wayPoint[i] = np.clip(wayPoint[i], 0, 639)
     
     if(wayLines['number_of_fits'] == 'left'):
             for i in range(len(y_Values)):
                 wayPoint[i] = wayLines['left_fit'][0] * y_Values[i]**2 + wayLines['left_fit'][1] * y_Values[i] + wayLines['left_fit'][2] + offset
-            # if(wayPoint[i] < 0):
-            #      wayPoint[i] = 0
-            # elif(wayPoint[i] > 640):
-            #      wayPoint = 640 
+                wayPoint[i] = np.clip(wayPoint[i], 0, 639)
 
     if(wayLines['number_of_fits'] == 'right'):
             for i in range(len(y_Values)):
                 wayPoint[i] = wayLines['right_fit'][0] * y_Values[i]**2 + wayLines['right_fit'][1] * y_Values[i] + wayLines['right_fit'][2] - offset
-            # if(wayPoint[i] < 0):
-            #      wayPoint[i] = 0
-            # elif(wayPoint[i] > 640):
-            #      wayPoint = 640 
-                 
+                wayPoint[i] = np.clip(wayPoint[i], 0, 639)
+
     if(wayLines['number_of_fits'] == '0'):
             for i in range(len(y_Values)):
                  wayPoint[i] = 320
@@ -154,7 +145,7 @@ class laneDetectNode():
             c_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
             roadImage = getIPM(self.cv_image)
             binary_warped = getLanes(roadImage)
-            cv2.imshow("Warped preview", binary_warped)
+            # cv2.imshow("Warped preview", roadImage)
             key = cv2.waitKey(1)
                 # Perform polynomial fit
             if not self.detected:
@@ -228,7 +219,7 @@ class laneDetectNode():
             # print(ret)
             y_Values = np.array([10,50,100,150,200,250])
             wayPoint = getWaypoints(ret,y_Values)
-            gyu_img = viz3(binary_warped, ret,wayPoint,y_Values)
+            gyu_img = viz3(getIPM(c_image),c_image, ret,wayPoint,y_Values, False)
             cv2.imshow("final preview", gyu_img)       # binary_warped = getLanes(roadImage)
             # cv2.imshow("Warped preview", binary_warped)
             # Publish waypoints corresponding to the IPM transformed image pixels

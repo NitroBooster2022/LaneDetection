@@ -6,6 +6,30 @@ import pickle
 
 lane_width =350
 
+# #-----Declare Global Variables ----- #
+
+CAMERA_PARAMS = {'fx': 554.3826904296875, 'fy': 554.3826904296875, 'cx': 320, 'cy': 240} # Camera parameters - need to calibrate
+
+# Initial coordinates of input image
+initial = np.float32([[0,300],
+                      [640,300],
+                      [0,480],
+                      [640,480]])
+
+# Where the initial coordinates will end up on the final image
+final = np.float32([[0,0],
+                    [640,0],
+                    [0,480],
+                    [640,480]])
+
+# Compute the transformation matix
+transMatrix = cv2.getPerspectiveTransform(final, initial)
+
+# Camera matrix for accurate IPM transform
+cameraMatrix = np.array([[CAMERA_PARAMS['fx'], 0, CAMERA_PARAMS['cx']],
+                         [0, CAMERA_PARAMS['fy'], CAMERA_PARAMS['cy']],
+                         [0, 0, 1]])
+
 def find_center_indices(hist, threshold):
 	"""
 	Function to find the center of the lanes detected in an image
@@ -63,7 +87,10 @@ def find_stop_line(image, threshold):
 		if len(group) >= 370:
 			stop_line = True
 			above_threshold2 = np.where(horistogram > 50000)[0]
-			width = abs(above_threshold2[-1]-above_threshold2[0])
+			if len(above_threshold2) > 0:
+				width = abs(above_threshold2[-1] - above_threshold2[0])
+			else:
+				width = 0  
 
 	return stop_line, max_index, width
 
@@ -289,8 +316,16 @@ def tune_fit(binary_warped, left_fit, right_fit, stop_line):
 		return ret
 	
 	# Fit a second order polynomial to each
-	left_fit = np.polyfit(lefty, leftx, 2)
-	right_fit = np.polyfit(righty, rightx, 2)
+	if ret['number of fits'] == '2':
+		left_fit = np.polyfit(lefty, leftx, 2)
+		right_fit = np.polyfit(righty, rightx, 2)
+
+	elif ret['number of fits'] == 'left':
+		left_fit = np.polyfit(lefty, leftx, 2)
+	
+	elif ret['number of fits'] == 'right':
+		left_fit = np.polyfit(righty, rightx, 2)
+
 	# Generate x and y values for plotting
 	# ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
 	# left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
@@ -307,39 +342,7 @@ def tune_fit(binary_warped, left_fit, right_fit, stop_line):
 	return ret
 
 
-def viz1(binary_warped, ret, save_file=None):
-	"""
-	Visualize each sliding window location and predicted lane lines, on binary warped image
-	save_file is a string representing where to save the image (if None, then just display)
-	"""
-	# Grab variables from ret dictionary
-	left_fit = ret['left_fit']
-	right_fit = ret['right_fit']
-	nonzerox = ret['nonzerox']
-	nonzeroy = ret['nonzeroy']
-	out_img = ret['out_img']
-	left_lane_inds = ret['left_lane_inds']
-	right_lane_inds = ret['right_lane_inds']
-
-	# Generate x and y values for plotting
-	ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
-	left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-	right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
-
-	out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
-	out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
-	plt.imshow(out_img)
-	plt.plot(left_fitx, ploty, color='yellow')
-	plt.plot(right_fitx, ploty, color='yellow')
-	plt.xlim(0, 1280)
-	plt.ylim(720, 0)
-	if save_file is None:
-		plt.show()
-	else:
-		plt.savefig(save_file)
-	plt.gcf().clear()
-
-def viz3(binary_warped, ret, waypoints, y_Values):
+def viz3(binary_warped, non_warped, ret, waypoints, y_Values, IPM = True):
 	"""
 	Visualize each sliding window location and predicted lane lines, on binary warped image
 	"""
@@ -358,8 +361,15 @@ def viz3(binary_warped, ret, waypoints, y_Values):
 		ploty = np.linspace(0, binary_warped.shape[0] - 1, binary_warped.shape[0])
 
 		# Create an empty image
-		img_shape = (binary_warped.shape[0], binary_warped.shape[1], 3)
-		result = np.zeros(img_shape, dtype=np.uint8)
+		# img_shape = (binary_warped.shape[0], binary_warped.shape[1], 3)
+		# result = np.zeros(img_shape, dtype=np.uint8)
+
+	# 	# Create an image to draw the lines on
+		warp_zero = np.zeros_like(binary_warped).astype(np.uint8)
+		result = np.dstack((warp_zero, warp_zero, warp_zero))
+		result = np.zeros((480, 640, 3), dtype='uint8')  # NOTE: Hard-coded image dimensions
+
+		if (IPM) :result = cv2.addWeighted(binary_warped, 1, result, 0.3, 0)
 
 		# Update values only if they are not None
 		if left_fit is not None:
@@ -373,24 +383,11 @@ def viz3(binary_warped, ret, waypoints, y_Values):
 
 	else:
 		return None;
-	# Draw the lane lines on the image
-	# if left_lane_inds is not None:
-	# 	result[nonzeroy[left_lane_inds]]= [0, 0, 255]
-	# 	result[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [0, 0, 255]
-	# if right_lane_inds is not None:
-	# 	result[nonzeroy[right_lane_inds]]= [0, 0, 255]
-	# 	result[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
 
 	if left_fitx is not None:
 		cv2.polylines(result, np.int32([np.column_stack((left_fitx, ploty))]), isClosed=False, color=(255, 255, 0), thickness=15)
 	if right_fitx is not None:
 		cv2.polylines(result, np.int32([np.column_stack((right_fitx, ploty))]), isClosed=False, color=(255, 255, 0), thickness=15)
-
-	if ret.get('stop_line', None)==True:
-		cv2.putText(result, 'Stopline detected!', (int(64),int(48)), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1, cv2.LINE_AA)
-	
-	if ret.get('cross_walk', None)==True:
-		cv2.putText(result, 'Crosswalk detected!', (int(128),int(96)), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1, cv2.LINE_AA)
 
 	for i in range(len(y_Values)):
 		# print(waypoints[i])
@@ -402,104 +399,20 @@ def viz3(binary_warped, ret, waypoints, y_Values):
 	if(stop_line):
 		# print("stopline")
 		cv2.line(result, (int(0),int(stop_index)), (int(639),int(stop_index)), color=(0, 0, 255), thickness = 2)
+	
+	if (not IPM):
+		dest_size = (binary_warped.shape[1],binary_warped.shape[0])
+		result = cv2.warpPerspective(result, transMatrix, dest_size, flags=cv2.INTER_LINEAR)
+		result = cv2.addWeighted(result, 1, non_warped, 0.5, 0)
 
+
+	if ret.get('stop_line', None)==True:
+		cv2.putText(result, 'Stopline detected!', (int(64),int(48)), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1, cv2.LINE_AA)
+	
+	if ret.get('cross_walk', None)==True:
+		cv2.putText(result, 'Crosswalk detected!', (int(128),int(96)), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1, cv2.LINE_AA)
+	
 	return result
-
-# def viz2(binary_warped, ret, save_file=None):
-# 	"""
-# 	Visualize the predicted lane lines with margin, on binary warped image
-# 	save_file is a string representing where to save the image (if None, then just display)
-# 	"""
-# 	# Grab variables from ret dictionary
-# 	left_fit = ret['left_fit']
-# 	right_fit = ret['right_fit']
-# 	nonzerox = ret['nonzerox']
-# 	nonzeroy = ret['nonzeroy']
-# 	left_lane_inds = ret['left_lane_inds']
-# 	right_lane_inds = ret['right_lane_inds']
-
-
-# 	# Create an image to draw on and an image to show the selection window
-# 	out_img = (np.dstack((binary_warped, binary_warped, binary_warped))*255).astype('uint8')
-# 	window_img = np.zeros_like(out_img)
-# 	# Color in left and right line pixels
-# 	out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
-# 	out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
-
-# 	# Generate x and y values for plotting
-# 	ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
-# 	left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-# 	right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
-
-# 	# Generate a polygon to illustrate the search window area
-# 	# And recast the x and y points into usable format for cv2.fillPoly()
-# 	margin = 100  # NOTE: Keep this in sync with *_fit()
-# 	left_line_window1 = np.array([np.transpose(np.vstack([left_fitx-margin, ploty]))])
-# 	left_line_window2 = np.array([np.flipud(np.transpose(np.vstack([left_fitx+margin, ploty])))])
-# 	left_line_pts = np.hstack((left_line_window1, left_line_window2))
-# 	right_line_window1 = np.array([np.transpose(np.vstack([right_fitx-margin, ploty]))])
-# 	right_line_window2 = np.array([np.flipud(np.transpose(np.vstack([right_fitx+margin, ploty])))])
-# 	right_line_pts = np.hstack((right_line_window1, right_line_window2))
-
-# 	# Draw the lane onto the warped blank image
-# 	cv2.fillPoly(window_img, np.int_([left_line_pts]), (0,255, 0))
-# 	cv2.fillPoly(window_img, np.int_([right_line_pts]), (0,255, 0))
-# 	result = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
-# 	plt.imshow(result)
-# 	plt.plot(left_fitx, ploty, color='yellow')
-# 	plt.plot(right_fitx, ploty, color='yellow')
-# 	plt.xlim(0, 1280)
-# 	plt.ylim(720, 0)
-# 	if save_file is None:
-# 		plt.show()
-# 	else:
-# 		plt.savefig(save_file)
-# 	plt.gcf().clear()
-
-
-# def calc_curve(left_lane_inds, right_lane_inds, nonzerox, nonzeroy):
-# 	"""
-# 	Calculate radius of curvature in meters
-# 	"""
-# 	y_eval = 719  # 720p video/image, so last (lowest on screen) y index is 719
-
-# 	# Define conversions in x and y from pixels space to meters
-# 	ym_per_pix = 30/720 # meters per pixel in y dimension
-# 	xm_per_pix = 3.7/700 # meters per pixel in x dimension
-
-# 	# Extract left and right line pixel positions
-# 	leftx = nonzerox[left_lane_inds]
-# 	lefty = nonzeroy[left_lane_inds]
-# 	rightx = nonzerox[right_lane_inds]
-# 	righty = nonzeroy[right_lane_inds]
-
-# 	# Fit new polynomials to x,y in world space
-# 	left_fit_cr = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
-# 	right_fit_cr = np.polyfit(righty*ym_per_pix, rightx*xm_per_pix, 2)
-# 	# Calculate the new radii of curvature
-# 	left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
-# 	right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
-# 	# Now our radius of curvature is in meters
-
-# 	return left_curverad, right_curverad
-
-
-# def calc_vehicle_offset(undist, left_fit, right_fit):
-# 	"""
-# 	Calculate vehicle offset from lane center, in meters
-# 	"""
-# 	# Calculate vehicle center offset in pixels
-# 	bottom_y = undist.shape[0] - 1
-# 	bottom_x_left = left_fit[0]*(bottom_y**2) + left_fit[1]*bottom_y + left_fit[2]
-# 	bottom_x_right = right_fit[0]*(bottom_y**2) + right_fit[1]*bottom_y + right_fit[2]
-# 	vehicle_offset = undist.shape[1]/2 - (bottom_x_left + bottom_x_right)/2
-
-# 	# Convert pixel offset to meters
-# 	xm_per_pix = 3.7/700 # meters per pixel in x dimension
-# 	vehicle_offset *= xm_per_pix
-
-# 	return vehicle_offset
-
 
 # def final_viz(undist, left_fit, right_fit, m_inv, left_curve, right_curve, vehicle_offset):
 # 	"""
