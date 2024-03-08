@@ -17,6 +17,14 @@ find_package(catkin REQUIRED COMPONENTS
   image_transport
 )
 
+find_package(OpenCV REQUIRED)
+if(OpenCV_FOUND) 
+  message("found ${OpenCV_VERSION}, ${OpenCV_INCLUDE_DIRS}")
+else()
+  message("cv not found")
+endif()
+
+
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 
@@ -110,7 +118,7 @@ catkin_package(
   CATKIN_DEPENDS utils
 #  INCLUDE_DIRS include
 #  LIBRARIES lane_detection
-#  CATKIN_DEPENDS roscpp rospy std_msgs
+ CATKIN_DEPENDS roscpp rospy std_msgs opencv2
 #  DEPENDS system_lib
 )
 
@@ -144,7 +152,7 @@ include_directories(
 #   src/camera.cpp
 # )
 # add_executable(lane
-#   src/lane.cpp
+#  src/lane.cpp
 # )
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -164,7 +172,7 @@ include_directories(
 #   ${catkin_LIBRARIES}
 # )
 # target_link_libraries(lane
-#   ${catkin_LIBRARIES}
+#  ${catkin_LIBRARIES}
 # )
 #############
 ## Install ##
