@@ -204,7 +204,7 @@ def line_fit(binary_warped):
 
 	nwindows = 9
 	# Set height of windows
-	window_height = np.int(binary_warped.shape[0]//nwindows)
+	window_height = int(binary_warped.shape[0]//nwindows)
 	# Identify the x and y positions of all nonzero pixels in the image
 	nonzero = binary_warped.nonzero()
 	nonzeroy = np.array(nonzero[0])
@@ -241,10 +241,10 @@ def line_fit(binary_warped):
 		right_lane_inds.append(good_right_inds)
 		# If you found > minpix pixels, recenter next window on their mean position
 		if len(good_left_inds) > minpix:
-			leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
+			leftx_current = int(np.mean(nonzerox[good_left_inds]))
 			# print('mean of left indices - ' + str(np.mean(nonzerox[good_left_inds])))
 		if len(good_right_inds) > minpix:
-			rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
+			rightx_current = int(np.mean(nonzerox[good_right_inds]))
 			#print('current right - '+str(rightx_current))
 	# Concatenate the arrays of indices
 	left_lane_inds = np.concatenate(left_lane_inds)
