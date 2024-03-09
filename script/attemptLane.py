@@ -92,21 +92,24 @@ def getWaypoints(wayLines, y_Values):
                 wayPoint[i] = 0.5*(x_right + x_left)
                 wayPoint[i] = np.clip(wayPoint[i], 0, 639)
     
-    if(wayLines['number_of_fits'] == 'left'):
+    elif(wayLines['number_of_fits'] == 'left'):
             for i in range(len(y_Values)):
                 wayPoint[i] = wayLines['left_fit'][0] * y_Values[i]**2 + wayLines['left_fit'][1] * y_Values[i] + wayLines['left_fit'][2] + offset
                 wayPoint[i] = np.clip(wayPoint[i], 0, 639)
+                # print(wayPoint)
 
-    if(wayLines['number_of_fits'] == 'right'):
+    elif(wayLines['number_of_fits'] == 'right'):
             for i in range(len(y_Values)):
                 wayPoint[i] = wayLines['right_fit'][0] * y_Values[i]**2 + wayLines['right_fit'][1] * y_Values[i] + wayLines['right_fit'][2] - offset
                 wayPoint[i] = np.clip(wayPoint[i], 0, 639)
 
-    if(wayLines['number_of_fits'] == '0'):
+    else:
             for i in range(len(y_Values)):
                  wayPoint[i] = 320
-
+    # print(wayPoint)
     return wayPoint
+
+
 class laneDetectNode():
     
         def __init__(self):
@@ -127,6 +130,7 @@ class laneDetectNode():
             self.left_line = Line(n=window_size)
             self.right_line = Line(n=window_size)
             self.stop_line = False
+            self.cross_walk = False
             self.lane_msg = Lane()
             # self.refresh = 0       # Counter to refresh the line detection
             # self.refresh = rospy.Timer(rospy.Duration(1), self.slow_detect)
@@ -159,6 +163,8 @@ class laneDetectNode():
                 left_fit = ret.get('left_fit', None)
                 right_fit = ret.get('right_fit', None)
                 self.stop_line = ret['stop_line']
+                if(self.stop_line):
+                     self.cross_walk = ret['cross_walk']
                 nonzerox = ret.get('nonzerox', None)
                 nonzeroy = ret.get('nonzeroy', None)
                 left_lane_inds = ret.get('left_lane_inds', None)
@@ -170,6 +176,8 @@ class laneDetectNode():
                 if right_fit is not None:
                     right_fit = self.right_line.add_fit(right_fit)
 
+                # if(self.stop_line):
+                    #  print(self.cross_walk)
                 # # Get moving average of line fit coefficients
                 # left_fit = left_line.add_fit(left_fit)
                 # right_fit = right_line.add_fit(right_fit)
@@ -185,14 +193,7 @@ class laneDetectNode():
                 left_fit = self.left_line.get_fit()
                 right_fit = self.right_line.get_fit()
                 ret = tune_fit(binary_warped, left_fit, right_fit,self.stop_line)
-                # left_fit = ret['left_fit']
-                # right_fit = ret['right_fit']
-                # nonzerox = ret['nonzerox']
-                # nonzeroy = ret['nonzeroy']
-                # left_lane_inds = ret['left_lane_inds']
-                # right_lane_inds = ret['right_lane_inds']
 
-                # Only make updates if we detected lines in current frame
             if ret is not None:
                 left_fit = ret.get('left_fit', None)
                 right_fit = ret.get('right_fit', None)
