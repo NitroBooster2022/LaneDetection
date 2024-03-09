@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import math
 from Line import Line
 from std_msgs.msg import Float32MultiArray, MultiArrayDimension
@@ -122,9 +122,11 @@ class laneDetectNode():
             self.normalized_depth_image = np.zeros((640, 480))
             rospy.init_node('LaneAttemptnod', anonymous=True)
             self.image_sub = rospy.Subscriber("/camera/color/image_raw", Image, self.callback)
-            self.waypoint_pub = rospy.Publisher("/lane/waypoints", Float32MultiArray, queue_size=3)
+            # self.waypoint_pub = rospy.Publisher("/lane/waypoints", Float32MultiArray, queue_size=3)
             self.lane_pub = rospy.Publisher("/lane", Lane, queue_size=3)
-            self.depth_sub = rospy.Subscriber("/camera/aligned_depth_to_color/image_raw", Image, self.depthcallback)
+            # self.depth_sub = rospy.Subscriber("/camera/aligned_depth_to_color/image_raw", Image, self.depthcallback)
+            # self.depth_sub = rospy.Subscriber("/camera/depth/image_raw", Image, self.depthcallback)
+            # self.depth_sub = rospy.Subscriber("/camera/depth/image_rect_raw", Image, self.depthcallback)
             self.detected = False  # did the fast line fit detect the lines?
             window_size = 2  # how many frames for line smoothing
             self.left_line = Line(n=window_size)
