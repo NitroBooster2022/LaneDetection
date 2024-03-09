@@ -11,6 +11,7 @@ from Line import Line
 from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 from line_fit import line_fit, tune_fit, viz3
 import timeit
+from utils.msg import Lane
 
 # #-----Declare Global Variables ----- #
 
@@ -66,7 +67,7 @@ def getLanes(inputImage):
     - Binary image of lane lines
     """ 
     imageHist = cv2.calcHist([inputImage], [0], None, [256], [0, 256])
-    threshold_value = np.clip(np.max(inputImage) - 55, 30, 200)
+    threshold_value = np.clip(np.max(inputImage) - 75, 30, 200)
     _, binary_thresholded = cv2.threshold(inputImage, threshold_value, 255, cv2.THRESH_BINARY)
     return binary_thresholded
 
@@ -122,13 +123,15 @@ class laneDetectNode():
             rospy.init_node('LaneAttemptnod', anonymous=True)
             self.image_sub = rospy.Subscriber("/camera/color/image_raw", Image, self.callback)
             self.waypoint_pub = rospy.Publisher("/lane/waypoints", Float32MultiArray, queue_size=3)
-            self.depth_sub = rospy.Subscriber("/camera/depth/image_raw", Image, self.depthcallback)
+            self.lane_pub = rospy.Publisher("/lane", Lane, queue_size=3)
+            self.depth_sub = rospy.Subscriber("/camera/aligned_depth_to_color/image_raw", Image, self.depthcallback)
             self.detected = False  # did the fast line fit detect the lines?
             window_size = 2  # how many frames for line smoothing
             self.left_line = Line(n=window_size)
             self.right_line = Line(n=window_size)
             self.stop_line = False
             self.cross_walk = False
+            self.lane_msg = Lane()
             # self.refresh = 0       # Counter to refresh the line detection
             # self.refresh = rospy.Timer(rospy.Duration(1), self.slow_detect)
             rospy.spin()
@@ -154,7 +157,7 @@ class laneDetectNode():
                 # Perform polynomial fit
             if not self.detected:
                 # print('SLOW')
-                t1 = timeit.default_timer()
+                # t1 = timeit.default_timer()
                 # Slow line fit
                 ret = line_fit(binary_warped)
                 left_fit = ret.get('left_fit', None)
@@ -194,11 +197,11 @@ class laneDetectNode():
             if ret is not None:
                 left_fit = ret.get('left_fit', None)
                 right_fit = ret.get('right_fit', None)
-                nonzerox = ret.get('nonzerox', None)
-                nonzeroy = ret.get('nonzeroy', None)
-                left_lane_inds = ret.get('left_lane_inds', None)
-                right_lane_inds = ret.get('right_lane_inds', None)
-                number_of_fits = ret['number_of_fits']
+                # nonzerox = ret.get('nonzerox', None)
+                # nonzeroy = ret.get('nonzeroy', None)
+                # left_lane_inds = ret.get('left_lane_inds', None)
+                # right_lane_inds = ret.get('right_lane_inds', None)
+                # number_of_fits = ret['number_of_fits']
 
                 # Update values only if they are not None
                 if left_fit is not None:
@@ -224,20 +227,25 @@ class laneDetectNode():
             cv2.imshow("final preview", gyu_img)       # binary_warped = getLanes(roadImage)
             # cv2.imshow("Warped preview", binary_warped)
             # Publish waypoints corresponding to the IPM transformed image pixels
-            waypoints = Float32MultiArray()
-            dimension = MultiArrayDimension()
-            dimension.label = "#ofwaypoints"
-            dimension.size = 6
-            waypoints.layout.dim = [dimension]
-            # print(wayPoint)
-            wp1 = self.pixel_to_world(wayPoint[0],10)
-            wp2 = self.pixel_to_world(wayPoint[1],50)
-            wp3 = self.pixel_to_world(wayPoint[2],100)
-            wp4 = self.pixel_to_world(wayPoint[3],150)
-            wp5 = self.pixel_to_world(wayPoint[4],200)
-            wp6 = self.pixel_to_world(wayPoint[5],250)
-            waypoints.data = [wp1[1], -wp1[0], wp2[1], -wp2[0], wp3[1], -wp3[0], wp4[1], -wp4[0], wp5[1], -wp5[0], wp6[1], -wp6[0]]
-            self.waypoint_pub.publish(waypoints)
+            # waypoints = Float32MultiArray()
+            # dimension = MultiArrayDimension()
+            # dimension.label = "#ofwaypoints"
+            # dimension.size = 6
+            # waypoints.layout.dim = [dimension]
+
+            # wp1 = self.pixel_to_world(wayPoint[0],10)
+            # wp2 = self.pixel_to_world(wayPoint[1],50)
+            # wp3 = self.pixel_to_world(wayPoint[2],100)
+            # wp4 = self.pixel_to_world(wayPoint[3],150)
+            # wp5 = self.pixel_to_world(wayPoint[4],200)
+            # wp6 = self.pixel_to_world(wayPoint[5],250)
+            self.lane_msg.center = wayPoint[5]
+            self.lane_msg.stopline = self.stop_line
+            if self.stop_line and ret is not None:
+                self.lane_msg.crosswalk = ret['cross_walk']
+            self.lane_pub.publish(self.lane_msg)
+            # waypoints.data = [wp1[1], -wp1[0], wp2[1], -wp2[0], wp3[1], -wp3[0], wp4[1], -wp4[0], wp5[1], -wp5[0], wp6[1], -wp6[0]]
+            # self.waypoint_pub.publish(waypoints)
             # print(timeit.default_timer()-t1)
 
         # Convert IPM pixel coordinates to world coordinates (relative to camera)
@@ -248,6 +256,9 @@ class laneDetectNode():
             original_pixel_coord = cv2.perspectiveTransform(np.array([[[x, y]]], dtype='float32'), np.linalg.inv(transMatrix))[0][0].astype(int)
             # print(original_pixel_coord)
             depth_value = self.depth_image[original_pixel_coord[1], original_pixel_coord[0]]/1000
+            # print(depth_value)
+            if depth_value < 0.03:
+                return np.array([0,0])
             map_y = math.sqrt(math.pow(depth_value,2)-math.pow(height,2))
             map_x = (original_pixel_coord[0] - CAMERA_PARAMS['cx']) * depth_value / CAMERA_PARAMS['fx'] + roll * depth_value
             return np.array([map_x,map_y])
