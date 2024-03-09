@@ -170,7 +170,7 @@ def line_fit(binary_warped):
 	threshold = 5000 # Magic number for constant discovered by Antoine in 2023 AD
 	stop_line, stop_index, width = find_stop_line(binary_warped,threshold)		# check for stop line and its location
 	indices= find_center_indices(histogram,threshold+width*125)	# find the center of possible lane markings
-	# print(threshold+width*255)
+	# print(len(indices))
 	
 	if(stop_line):
 		cross_walk = check_cross_walk(binary_warped, stop_index)		# if there is a stop line, check for crosswalk
@@ -191,10 +191,12 @@ def line_fit(binary_warped):
 		ret = {}
 		if(indices[0] < 320):	 # if lane marking is on the left side of the image
 			ret['number_of_fits'] = 'left'
+			leftx_base = indices[0]
+			rightx_base = 0
 		else:					 # if lane marking is on the right side of the image
 			ret['number_of_fits'] = 'right'
-		leftx_base = indices[0]
-		rightx_base = indices[0]
+			rightx_base = indices[0]
+			leftx_base = 0
 
 	else:						 # two or more lane markings found
 		ret = {}
@@ -225,50 +227,64 @@ def line_fit(binary_warped):
 		# Identify window boundaries in x and y (and right and left)
 		win_y_low = binary_warped.shape[0] - (window+1)*window_height
 		win_y_high = binary_warped.shape[0] - window*window_height
-		win_xleft_low = leftx_current - margin
-		win_xleft_high = leftx_current + margin
-		win_xright_low = rightx_current - margin
-		win_xright_high = rightx_current + margin
-		# print('current left - ' + str(leftx_current))
+		# LEFT LANE
+		if(ret['number_of_fits'] == 'left' or ret['number_of_fits'] == '2'):
+			win_xleft_low = leftx_current - margin
+			win_xleft_high = leftx_current + margin
+			good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xleft_low) & (nonzerox < win_xleft_high)).nonzero()[0]
+			# Append these indices to the lists
+			left_lane_inds.append(good_left_inds)
+			# If you found > minpix pixels, recenter next window on their mean position
+			if len(good_left_inds) > minpix:
+				leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
+
+		# RIGHT LANE
+		if(ret['number_of_fits'] == 'right' or ret['number_of_fits'] == '2'):
+			win_xright_low = rightx_current - margin
+			win_xright_high = rightx_current + margin
+			good_right_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xright_low) & (nonzerox < win_xright_high)).nonzero()[0]
+			# Append these indices to the lists
+			right_lane_inds.append(good_right_inds)
+			# If you found > minpix pixels, recenter next window on their mean position
+			if len(good_right_inds) > minpix:
+				rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
+
 		# Draw the windows on the visualization image
 		# cv2.rectangle(out_img,(win_xleft_low,win_y_low),(win_xleft_high,win_y_high),(0,255,0), 2)
 		# cv2.rectangle(out_img,(win_xright_low,win_y_low),(win_xright_high,win_y_high),(0,255,0), 2)
 		# Identify the nonzero pixels in x and y within the window
-		good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xleft_low) & (nonzerox < win_xleft_high)).nonzero()[0]
-		good_right_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xright_low) & (nonzerox < win_xright_high)).nonzero()[0]
-		# Append these indices to the lists
-		left_lane_inds.append(good_left_inds)
-		right_lane_inds.append(good_right_inds)
-		# If you found > minpix pixels, recenter next window on their mean position
-		if len(good_left_inds) > minpix:
-			leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
+
 			# print('mean of left indices - ' + str(np.mean(nonzerox[good_left_inds])))
-		if len(good_right_inds) > minpix:
-			rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
+
 			#print('current right - '+str(rightx_current))
 	# Concatenate the arrays of indices
-	left_lane_inds = np.concatenate(left_lane_inds)
-	right_lane_inds = np.concatenate(right_lane_inds)
-
 	# Extract left and right line pixel positions
-	(nonzerox[left_lane_inds])
-	leftx = nonzerox[left_lane_inds]
-	lefty = nonzeroy[left_lane_inds]
-	rightx = nonzerox[right_lane_inds]
-	righty = nonzeroy[right_lane_inds]
+	if(ret['number_of_fits'] == 'left' or ret['number_of_fits'] == '2'):
+		left_lane_inds = np.concatenate(left_lane_inds)
+		leftx = nonzerox[left_lane_inds]
+		lefty = nonzeroy[left_lane_inds]
+		left_fit = np.polyfit(lefty, leftx, 2)
+		ret['left_fit'] = left_fit
+		ret['left_lane_inds'] = left_lane_inds
+	
+	if(ret['number_of_fits'] == 'right' or ret['number_of_fits'] == '2'):
+		right_lane_inds = np.concatenate(right_lane_inds)
+		rightx = nonzerox[right_lane_inds]
+		righty = nonzeroy[right_lane_inds]
+		right_fit = np.polyfit(righty, rightx, 2)
+		ret['right_fit'] = right_fit
+		ret['right_lane_inds'] = right_lane_inds
 
 	# Fit a second order polynomial to each
-	left_fit = np.polyfit(lefty, leftx, 2)
-	right_fit = np.polyfit(righty, rightx, 2)
-
+	
+	# print("left" + str(left_fit))
+	# print("right" + str(right_fit))
+	
 	# Return a dict of relevant variables
-	ret['left_fit'] = left_fit
-	ret['right_fit'] = right_fit
+
 	ret['nonzerox'] = nonzerox
 	ret['nonzeroy'] = nonzeroy
 	ret['out_img'] = out_img
-	ret['left_lane_inds'] = left_lane_inds
-	ret['right_lane_inds'] = right_lane_inds
 	ret['stop_line'] = stop_line
 	ret['stop_index'] = stop_index
 	if(stop_line):
@@ -393,7 +409,7 @@ def viz3(binary_warped, non_warped, ret, waypoints, y_Values, IPM = True):
 		# print(waypoints[i])
 		x = int(waypoints[i])
 		y = int(y_Values[i])
-		cv2.circle(result, (x, y), 5, (0, 255, 0), -1)  # Draw a filled green circle
+		cv2.circle(result, (x, y), 5, (0, 0, 255), -1)  # Draw a filled green circle
 
 	# Draw stop line
 	if(stop_line):
