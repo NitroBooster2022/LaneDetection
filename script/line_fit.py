@@ -206,7 +206,7 @@ def line_fit(binary_warped):
 
 	nwindows = 9
 	# Set height of windows
-	window_height = np.int(binary_warped.shape[0]//nwindows)
+	window_height = int(binary_warped.shape[0]//nwindows)
 	# Identify the x and y positions of all nonzero pixels in the image
 	nonzero = binary_warped.nonzero()
 	nonzeroy = np.array(nonzero[0])
@@ -253,9 +253,18 @@ def line_fit(binary_warped):
 		# cv2.rectangle(out_img,(win_xleft_low,win_y_low),(win_xleft_high,win_y_high),(0,255,0), 2)
 		# cv2.rectangle(out_img,(win_xright_low,win_y_low),(win_xright_high,win_y_high),(0,255,0), 2)
 		# Identify the nonzero pixels in x and y within the window
-
+		# print('mean of left indices - ' + str(np.mean(nonzerox[good_left_inds])))
+		good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xleft_low) & (nonzerox < win_xleft_high)).nonzero()[0]
+		good_right_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xright_low) & (nonzerox < win_xright_high)).nonzero()[0]
+		# Append these indices to the lists
+		left_lane_inds.append(good_left_inds)
+		right_lane_inds.append(good_right_inds)
+		# If you found > minpix pixels, recenter next window on their mean position
+		if len(good_left_inds) > minpix:
+			leftx_current = int(np.mean(nonzerox[good_left_inds]))
 			# print('mean of left indices - ' + str(np.mean(nonzerox[good_left_inds])))
-
+		if len(good_right_inds) > minpix:
+			rightx_current = int(np.mean(nonzerox[good_right_inds]))
 			#print('current right - '+str(rightx_current))
 	# Concatenate the arrays of indices
 	# Extract left and right line pixel positions
