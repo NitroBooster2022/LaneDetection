@@ -109,7 +109,7 @@ def getWaypoints(wayLines, y_Values):
     else:
             for i in range(len(y_Values)):
                  wayPoint[i] = 320
-    # print(wayPoint)
+    print(wayPoint)
     return wayPoint
 
 
