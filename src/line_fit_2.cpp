@@ -72,9 +72,9 @@ std::vector<int> find_center_indices(const std::vector<int> & hist, int threshol
     }
 
     // Iterate over consecutive_groups and find ones that are five continuous pixels or more
-    for (const auto& group : consecutive_groups) {
+    for (const std::vector<int>& group : consecutive_groups) {
         if (group.size() >= 5) {
-            valid_groups.insert(valid_groups.end(), group.begin(), group.end());
+            valid_groups.push_back(group);
         }
     }
 
