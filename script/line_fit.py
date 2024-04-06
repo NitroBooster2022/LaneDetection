@@ -30,6 +30,39 @@ cameraMatrix = np.array([[CAMERA_PARAMS['fx'], 0, CAMERA_PARAMS['cx']],
                          [0, CAMERA_PARAMS['fy'], CAMERA_PARAMS['cy']],
                          [0, 0, 1]])
 
+distCoeff = np.array([])
+
+def getIPM(inputImage):
+    """
+    Calculate the inverse perspective transform of the input image
+
+    Parameters:
+    - input image
+    - Matrix with parameters of the camera
+    - Matrix with the desired perspective transform
+    Returns:
+     - Persepctive transformed image
+    """
+    undistortImage = cv2.undistort(inputImage, cameraMatrix, distCoeff)
+    dest_size = (inputImage.shape[1],inputImage.shape[0])
+    inverseMap = cv2.warpPerspective(undistortImage, transMatrix, dest_size, flags=cv2.INTER_LINEAR)
+    return inverseMap
+
+def getLanes(inputImage):
+    """
+    Compute the lane lines of a given input image
+
+    Parameters:
+    - Input image to compute edges for
+    Returns:
+    - Binary image of lane lines
+    """ 
+    imageHist = cv2.calcHist([inputImage], [0], None, [256], [0, 256])
+    threshold_value = np.clip(np.max(inputImage) - 75, 30, 200)
+    _, binary_thresholded = cv2.threshold(inputImage, threshold_value, 255, cv2.THRESH_BINARY)
+    return binary_thresholded
+
+
 def find_center_indices(hist, threshold):
 	"""
 	Function to find the center of the lanes detected in an image
@@ -47,6 +80,7 @@ def find_center_indices(hist, threshold):
 
 	# Find consecutive groups of five or more indices
 	consecutive_groups = np.split(above_threshold, np.where(np.diff(above_threshold) != 1)[0] + 1)
+	# print(consecutive_groups)
 
 	# Filter groups with five or more consecutive indices
 	# valid_groups = [group for group in consecutive_groups if len(group) >= 5]
@@ -164,10 +198,10 @@ def line_fit(binary_warped):
 	# 		rightx_base = 639-i
 	# 		break
 	# print(midpoint,leftx_base, rightx_base)
-	# plt.plot(histogram)
-	# plt.show()
+	plt.plot(histogram)
+	plt.show()
 	# Choose the number of sliding windows
-	threshold = 5000 # Magic number for constant discovered by Antoine in 2023 AD
+	threshold = 2000 # Magic number for constant discovered by Antoine in 2023 AD
 	stop_line, stop_index, width = find_stop_line(binary_warped,threshold)		# check for stop line and its location
 	indices= find_center_indices(histogram,threshold+width*125)	# find the center of possible lane markings
 	# print(len(indices))
@@ -254,17 +288,22 @@ def line_fit(binary_warped):
 		# cv2.rectangle(out_img,(win_xright_low,win_y_low),(win_xright_high,win_y_high),(0,255,0), 2)
 		# Identify the nonzero pixels in x and y within the window
 		# print('mean of left indices - ' + str(np.mean(nonzerox[good_left_inds])))
-		good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xleft_low) & (nonzerox < win_xleft_high)).nonzero()[0]
-		good_right_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xright_low) & (nonzerox < win_xright_high)).nonzero()[0]
-		# Append these indices to the lists
-		left_lane_inds.append(good_left_inds)
-		right_lane_inds.append(good_right_inds)
-		# If you found > minpix pixels, recenter next window on their mean position
-		if len(good_left_inds) > minpix:
-			leftx_current = int(np.mean(nonzerox[good_left_inds]))
+  	# Append these indices to the lists
+		if(ret['number_of_fits'] == 'left' or ret['number_of_fits'] == '2'):
+			good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xleft_low) & (nonzerox < win_xleft_high)).nonzero()[0]
+			left_lane_inds.append(good_left_inds)
+			# If you found > minpix pixels, recenter next window on their mean position
+			if len(good_left_inds) > minpix:
+				leftx_current = int(np.mean(nonzerox[good_left_inds]))
+		if(ret['number_of_fits'] == 'right' or ret['number_of_fits'] == '2'):
+			good_right_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xright_low) & (nonzerox < win_xright_high)).nonzero()[0]
+			right_lane_inds.append(good_right_inds)
+			if len(good_right_inds) > minpix:
+				rightx_current = int(np.mean(nonzerox[good_right_inds]))
+		
+
 			# print('mean of left indices - ' + str(np.mean(nonzerox[good_left_inds])))
-		if len(good_right_inds) > minpix:
-			rightx_current = int(np.mean(nonzerox[good_right_inds]))
+
 			#print('current right - '+str(rightx_current))
 	# Concatenate the arrays of indices
 	# Extract left and right line pixel positions
@@ -476,3 +515,15 @@ def viz3(binary_warped, non_warped, ret, waypoints, y_Values, IPM = True):
 
 # 	return result
 
+if __name__ == '__main__':
+	basic_image =  cv2.imread("/home/nash/Desktop/Simulator/src/LaneDetection/src/lane_image.png",cv2.IMREAD_GRAYSCALE)
+	roadImage = getIPM(basic_image)
+	binary_warped = getLanes(roadImage)
+	ret = line_fit(binary_warped)
+	left_fit = ret.get('left_fit', None)
+	right_fit = ret.get('right_fit', None)
+	print(left_fit)
+	print(right_fit)
+	cv2.imshow("basic image",basic_image)
+	cv2.waitKey(0)
+	cv2.destroyAllWindows()
