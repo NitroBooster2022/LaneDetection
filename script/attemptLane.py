@@ -102,11 +102,14 @@ def getWaypoints(wayLines, y_Values):
             for i in range(len(y_Values)):
                 wayPoint[i] = wayLines['right_fit'][0] * y_Values[i]**2 + wayLines['right_fit'][1] * y_Values[i] + wayLines['right_fit'][2] - offset
                 wayPoint[i] = np.clip(wayPoint[i], 0, 639)
-
+    elif(wayLines['stop_line']):
+        for i in range(len(y_Values)):
+                wayPoint[i] = 320
+                
     else:
             for i in range(len(y_Values)):
                  wayPoint[i] = 320
-    # print(wayPoint)
+    print(wayPoint)
     return wayPoint
 
 
@@ -229,25 +232,20 @@ class laneDetectNode():
             cv2.imshow("final preview", gyu_img)       # binary_warped = getLanes(roadImage)
             # cv2.imshow("Warped preview", binary_warped)
             # Publish waypoints corresponding to the IPM transformed image pixels
-            # waypoints = Float32MultiArray()
-            # dimension = MultiArrayDimension()
-            # dimension.label = "#ofwaypoints"
-            # dimension.size = 6
-            # waypoints.layout.dim = [dimension]
-
-            # wp1 = self.pixel_to_world(wayPoint[0],10)
-            # wp2 = self.pixel_to_world(wayPoint[1],50)
-            # wp3 = self.pixel_to_world(wayPoint[2],100)
-            # wp4 = self.pixel_to_world(wayPoint[3],150)
-            # wp5 = self.pixel_to_world(wayPoint[4],200)
-            # wp6 = self.pixel_to_world(wayPoint[5],250)
-            self.lane_msg.center = wayPoint[5]
-            self.lane_msg.stopline = self.stop_line
-            if self.stop_line and ret is not None:
-                self.lane_msg.crosswalk = ret['cross_walk']
-            self.lane_pub.publish(self.lane_msg)
-            # waypoints.data = [wp1[1], -wp1[0], wp2[1], -wp2[0], wp3[1], -wp3[0], wp4[1], -wp4[0], wp5[1], -wp5[0], wp6[1], -wp6[0]]
-            # self.waypoint_pub.publish(waypoints)
+            waypoints = Float32MultiArray()
+            dimension = MultiArrayDimension()
+            dimension.label = "#ofwaypoints"
+            dimension.size = 6
+            waypoints.layout.dim = [dimension]
+            # print(wayPoint)
+            wp1 = self.pixel_to_world(wayPoint[0],10)
+            wp2 = self.pixel_to_world(wayPoint[1],50)
+            wp3 = self.pixel_to_world(wayPoint[2],100)
+            wp4 = self.pixel_to_world(wayPoint[3],150)
+            wp5 = self.pixel_to_world(wayPoint[4],200)
+            wp6 = self.pixel_to_world(wayPoint[5],250)
+            waypoints.data = [wp1[1], -wp1[0], wp2[1], -wp2[0], wp3[1], -wp3[0], wp4[1], -wp4[0], wp5[1], -wp5[0], wp6[1], -wp6[0]]
+            self.waypoint_pub.publish(waypoints)
             # print(timeit.default_timer()-t1)
 
         # Convert IPM pixel coordinates to world coordinates (relative to camera)
