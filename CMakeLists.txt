@@ -16,7 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   image_transport
 )
-find_package(Python3 COMPONENTS Interpreter Development)
+find_package(Python3 COMPONENTS Development)
 
 find_package(OpenCV REQUIRED)
 if(OpenCV_FOUND) 
@@ -129,6 +129,11 @@ catkin_package(
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
+
+#Set the python library path -- for jeston
+#set(Python3_LIBRARY /usr/bin/python3)
+
+
 include_directories(
 # include
   src/include

@@ -1,6 +1,8 @@
+#!/usr/bin/env python3
+
 import numpy as np
 import cv2
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 # import matplotlib.image as mpimg
 import pickle
 
@@ -23,7 +25,7 @@ final = np.float32([[0,0],
                     [640,480]])
 
 # Compute the transformation matix
-transMatrix = cv2.getPerspectiveTransform(final, initial)
+transMatrix = cv2.getPerspectiveTransform(initial, final)
 
 # Camera matrix for accurate IPM transform
 cameraMatrix = np.array([[CAMERA_PARAMS['fx'], 0, CAMERA_PARAMS['cx']],
@@ -198,8 +200,8 @@ def line_fit(binary_warped):
 	# 		rightx_base = 639-i
 	# 		break
 	# print(midpoint,leftx_base, rightx_base)
-	plt.plot(histogram)
-	plt.show()
+	# plt.plot(histogram)
+	# plt.show()
 	# Choose the number of sliding windows
 	threshold = 2000 # Magic number for constant discovered by Antoine in 2023 AD
 	stop_line, stop_index, width = find_stop_line(binary_warped,threshold)		# check for stop line and its location
@@ -516,14 +518,14 @@ def viz3(binary_warped, non_warped, ret, waypoints, y_Values, IPM = True):
 # 	return result
 
 if __name__ == '__main__':
-	basic_image =  cv2.imread("/home/nash/Desktop/Simulator/src/LaneDetection/src/lane_image.png",cv2.IMREAD_GRAYSCALE)
+	basic_image =  cv2.imread("/home/scandy/Documents/Simulator/src/LaneDetection/src/lane_image.png",cv2.IMREAD_GRAYSCALE)
 	roadImage = getIPM(basic_image)
 	binary_warped = getLanes(roadImage)
 	ret = line_fit(binary_warped)
 	left_fit = ret.get('left_fit', None)
 	right_fit = ret.get('right_fit', None)
-	print(left_fit)
-	print(right_fit)
-	cv2.imshow("basic image",basic_image)
+	print("left fit : " + str(left_fit))
+	print("right fit : " + str(right_fit))
+	cv2.imshow("ipm image",roadImage)
 	cv2.waitKey(0)
 	cv2.destroyAllWindows()
