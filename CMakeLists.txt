@@ -16,10 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   image_transport
 )
-<<<<<<< HEAD
-=======
 find_package(Python3 COMPONENTS Development)
->>>>>>> 84d65cf9da401aca6c17e3eb9089193fb71819c9
 
 find_package(OpenCV REQUIRED)
 if(OpenCV_FOUND) 
@@ -140,8 +137,10 @@ catkin_package(
 include_directories(
 # include
   src/include
+  ${Python3_INCLUDE_DIRS}
   ${catkin_INCLUDE_DIRS}
   ${CMAKE_CURRENT_SOURCE_DIR}/include/alglib-cpp/src
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/matplotlib-cpp
 )
 
 ## Declare a C++ library
@@ -189,6 +188,16 @@ target_link_libraries(attemptLane_2
 )
 target_link_libraries(line_fit_2
  ${catkin_LIBRARIES}
+)
+
+target_link_libraries(line_fit_2
+  alglib
+  )
+
+target_link_libraries(attemptLane_2
+  alglib
+  # matplotlib
+  ${Python3_LIBRARIES}
 )
 #############
 ## Install ##

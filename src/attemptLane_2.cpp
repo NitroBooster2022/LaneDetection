@@ -3,8 +3,19 @@
 // #include <image_transport/image_transport.h>
 // #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/Image.h>
-// #include <chrono>
+#include <chrono>
 // using namespace std::chrono;
+// #include "line_fit_2.h"
+#include <vector>
+#include <algorithm>
+#include <cmath>
+#include <tuple>
+#include "interpolation.h"
+#include "stdafx.h"
+#include <iostream>
+#include "matplotlibcpp.h"
+
+namespace plt = matplotlibcpp;
 
 
 class LaneDetectNode_2{
@@ -67,6 +78,29 @@ class LaneDetectNode_2{
 
         //------------------Declare Global Functions ---------------------------------//
 
+
+        void printTuple(const std::tuple<int, std::vector<double>, std::vector<double>, bool, int, bool>& ret) {
+            std::cout << "Contents of the tuple ret:" << std::endl;
+            std::cout << "number_of_fits: " << std::get<0>(ret) << std::endl;
+
+            std::cout << "left_fit: ";
+            for (const auto& val : std::get<1>(ret)) {
+                std::cout << val << " ";
+            }
+            std::cout << std::endl;
+
+            std::cout << "right_fit: ";
+            for (const auto& val : std::get<2>(ret)) {
+                std::cout << val << " ";
+            }
+            std::cout << std::endl;
+
+            std::cout << "stop_line: " << std::boolalpha << std::get<3>(ret) << std::endl;
+            std::cout << "stop_index: " << std::get<4>(ret) << std::endl;
+            std::cout << "cross_walk: " << std::boolalpha << std::get<5>(ret) << std::endl;
+        }
+
+
         cv::Mat getIPM(cv::Mat inputImage) {
             cv::Mat undistortImage;
             cv::undistort(inputImage, undistortImage, cameraMatrix, distCoeff);
@@ -87,68 +121,77 @@ class LaneDetectNode_2{
             return binary_thresholded;
         }
 
-        std::vector<double> getWaypoints(std::map<std::string, std::string> wayLines, std::vector<double> y_Values) {
+        std::vector<double> getWaypoints(std::tuple<int,std::vector<double>, std::vector<double>, bool, int, bool> ret, std::vector<int> &y_Values) {
             int offset = 175;
-            std::vector<double> wayPoint(y_Values.size(), 0);
-            if (wayLines["number_of_fits"] == "2") {
+            std::vector<double> wayPoint(y_Values.size()); // Resized wayPoint to match the size of y_Values
+             std::vector<double> L_x(y_Values.size());     // Resized L_x
+            std::vector<double> R_x(y_Values.size());     // Resized R_x
+            int number_of_fits = std::get<0>(ret);
+            std::vector<double> fit_L = std::get<1>(ret);
+            std::vector<double> fit_R = std::get<2>(ret);
+            std::cout << "Variables init:" << std::endl;
+            if (number_of_fits == 2) {
                 for (size_t i = 0; i < y_Values.size(); ++i) {
-                    double x_right = wayLines["right_fit"][0] * pow(y_Values[i], 2) + wayLines["right_fit"][1] * y_Values[i] + wayLines["right_fit"][2];
-                    double x_left = wayLines["left_fit"][0] * pow(y_Values[i], 2) + wayLines["left_fit"][1] * y_Values[i] + wayLines["left_fit"][2];
-                    wayPoint[i] = 0.5 * (x_right + x_left);
-                    wayPoint[i] = std::min(std::max(wayPoint[i], 0.0), 639.0);
+                    L_x[i] = fit_L[0] + y_Values[i]*fit_L[1] + fit_L[2]*(y_Values[i])*(y_Values[i]);
+                    R_x[i] = fit_R[0] + y_Values[i]*fit_R[1] + fit_R[2]*(y_Values[i])*(y_Values[i]);
+                    wayPoint[i] = 0.5*(L_x[i] + R_x[i]);
+                    wayPoint[i] = static_cast<int>(std::max(0.0, std::min(static_cast<double>(wayPoint[i]), 639.0)));
                 }
-            } else if (wayLines["number_of_fits"] == "left") {
+            } else if (number_of_fits == 1) {
                 for (size_t i = 0; i < y_Values.size(); ++i) {
-                    wayPoint[i] = wayLines["left_fit"][0] * pow(y_Values[i], 2) + wayLines["left_fit"][1] * y_Values[i] + wayLines["left_fit"][2] + offset;
-                    wayPoint[i] = std::min(std::max(wayPoint[i], 0.0), 639.0);
+                    L_x[i] = fit_L[0] + y_Values[i]*fit_L[1] + fit_L[2]*(y_Values[i])*(y_Values[i]);
+                    wayPoint[i] = static_cast<int>(std::max(0.0, std::min(static_cast<double>(wayPoint[i]), 639.0)));
                 }
-            } else if (wayLines["number_of_fits"] == "right") {
+            } else if (number_of_fits == 3) {
                 for (size_t i = 0; i < y_Values.size(); ++i) {
-                    wayPoint[i] = wayLines["right_fit"][0] * pow(y_Values[i], 2) + wayLines["right_fit"][1] * y_Values[i] + wayLines["right_fit"][2] - offset;
-                    wayPoint[i] = std::min(std::max(wayPoint[i], 0.0), 639.0);
+                    R_x[i] = fit_R[0] + y_Values[i]*fit_R[1] + fit_R[2]*(y_Values[i])*(y_Values[i]);
+                    wayPoint[i] = static_cast<int>(std::max(0.0, std::min(static_cast<double>(wayPoint[i]), 639.0)));
                 }
-            } else if (wayLines["stop_line"] == "0") {
-                for (size_t i = 0; i < y_Values.size(); ++i) {
-                    wayPoint[i] = 320;
-                }
+            // } else if (wayLines["stop_line"] == "0") {
+            //     for (size_t i = 0; i < y_Values.size(); ++i) {
+            //         wayPoint[i] = 320;
+            //     }
             } else {
                 for (size_t i = 0; i < y_Values.size(); ++i) {
                     wayPoint[i] = 320;
                 }
             }
-            for (size_t i = 0; i < wayPoint.size(); ++i)
-                std::cout << wayPoint[i] << " ";
-            std::cout << std::endl;
+            std::cout << "Before return:" << std::endl;
             return wayPoint;
         }
 };
 
-<<<<<<< HEAD
-=======
 //------------------------------------------------ LINE FIT PART BEGIN ------------------------------------------------------------------//
 //------------------------------------------------ LINE FIT PART BEGIN ------------------------------------------------------------------//
 //------------------------------------------------ LINE FIT PART BEGIN ------------------------------------------------------------------//
 
-void plot_polynomial(const std::vector<double> &a3) {
+void plot_polynomial(const std::vector<double> &a3, const std::vector<double> &a2, const std::vector<double> &a4, const std::vector<int> &yY) {
     // Create a range of x-values
     std::vector<int> x_values;
+    std::vector<double> x_2;
     for (int x = 0; x <= 640; x += 1) {
         x_values.push_back(x);
     }
 
     // Evaluate the polynomial for each x-value
-    std::vector<double> y_values(x_values.size());
+    std::vector<double> yR_values(x_values.size());
+    std::vector<double> yL_values(x_values.size());
     for (size_t i = 0; i < x_values.size(); ++i) {
-        y_values[i] = a3[0] + x_values[i]*a3[1] + (x_values[i]*a3[2])*(x_values[i]*a3[2]);
+        yL_values[i] = a3[0] + x_values[i]*a3[1] + a3[2]*(x_values[i])*(x_values[i]);
+        yR_values[i] = a2[0] + x_values[i]*a2[1] + a2[2]*(x_values[i])*(x_values[i]);
     }
 
     // Plot the polynomial curve
-    plt::plot(x_values, y_values);
-    plt::xlabel("x");
-    plt::ylabel("y");
-    plt::title("Plot of Polynomial");
-    plt::grid(true);
-    plt::show();
+        plt::plot(yR_values, x_values,".");
+        plt::plot(yL_values, x_values,".");
+        plt::plot(a4,yY,".");
+        plt::xlabel("x");
+        plt::ylabel("y");
+        plt::ylim(479,0);
+        plt::xlim(0,639);
+        plt::title("Plot of Polynomial");
+        plt::grid(true);
+        plt::show();
 }
 
 
@@ -564,13 +607,13 @@ std::tuple<int,std::vector<double>, std::vector<double>, bool, int, bool> line_f
             leftx.push_back(nonzerox[idx]);
             lefty.push_back(nonzeroy[idx]);            
         }
-        plt::plot(leftx, lefty);
-        plt::xlabel("x");
-        plt::ylabel("y");
-        plt::ylim(479,0);
-        plt::xlim(0,639);
-        plt::title("Plot of Polynomial");
-        plt::grid(true);
+        // plt::plot(leftx, lefty,".");
+        // plt::xlabel("x");
+        // plt::ylabel("y");
+        // plt::ylim(479,0);
+        // plt::xlim(0,639);
+        // plt::title("Plot of Polynomial");
+        // plt::grid(true);
         
 
         // Perform polynomial fitting
@@ -579,7 +622,7 @@ std::tuple<int,std::vector<double>, std::vector<double>, bool, int, bool> line_f
         y_left.setcontent(lefty.size(), lefty.data());  // Populate Y array
         alglib::polynomialfitreport rep_left;
         alglib::barycentricinterpolant p_left;  
-        alglib::polynomialfit(x_left, y_left, m, p_left, rep_left);     // Perform polynomial fit
+        alglib::polynomialfit(y_left, x_left, m, p_left, rep_left);     // Perform polynomial fit
 
         // Convert polynomial coefficients to standard form
         alglib::real_1d_array a1;
@@ -600,7 +643,7 @@ std::tuple<int,std::vector<double>, std::vector<double>, bool, int, bool> line_f
             righty.push_back(nonzeroy[idx]);
         }
 
-        plt::plot(rightx, righty);
+        // plt::plot(rightx, righty);
 
         // Perform polynomial fitting
         alglib::real_1d_array x_right, y_right;             // Declare alglib array type
@@ -608,7 +651,7 @@ std::tuple<int,std::vector<double>, std::vector<double>, bool, int, bool> line_f
         y_right.setcontent(righty.size(), righty.data());   // Populate Y array
         alglib::polynomialfitreport rep_right; 
         alglib::barycentricinterpolant p_right;
-        alglib::polynomialfit(x_right, y_right, m, p_right, rep_right);     // Perform polynomial fit
+        alglib::polynomialfit(y_right, x_right, m, p_right, rep_right);     // Perform polynomial fit
 
         // Convert polynomial coefficients to standard form
         alglib::real_1d_array a3;
@@ -616,9 +659,7 @@ std::tuple<int,std::vector<double>, std::vector<double>, bool, int, bool> line_f
         right_fit = convertToArray(a3);     // Convert back to std::Vector 
     }
 
-    plt::show();
     std::cout << "right polynomial fit done"<< std::endl;
-
     // Make and return tuple of required values
     ret = std::make_tuple(number_of_fits,left_fit,right_fit,stop_line,stop_index,cross_walk);
     return ret;
@@ -629,25 +670,30 @@ std::tuple<int,std::vector<double>, std::vector<double>, bool, int, bool> line_f
 //------------------------------------------------ LINE FIT PART END------------------------------------------------------------------//
 
 
->>>>>>> 84d65cf9da401aca6c17e3eb9089193fb71819c9
 int main(int argc, char *argv[])
 {
     /* code */
+    std::vector<int> y_Values = {10,50,100,150,200,250};
+    std::cout << "Starting the attemptLane_2 NODE..."<< std::endl;
     ros::init(argc, argv, "malosnode");
     std::cout << "node created";
     ros::NodeHandle nh;
     LaneDetectNode_2 detector;
-    cv::Mat color_image = cv::imread("/home/scandy/Documents/Simulator/src/LaneDetection/src/lane_image.png", cv::IMREAD_GRAYSCALE); // Remember to update image path
+    cv::Mat color_image = cv::imread("/home/nash/Desktop/Simulator/src/LaneDetection/src/lane_image.png", cv::IMREAD_GRAYSCALE); // Remember to update image path
     cv::Mat ipm_image = detector.getIPM(color_image);
     cv::Mat binary_image = detector.getLanes(ipm_image);
-<<<<<<< HEAD
-=======
     std::cout << "Starting the line fit..."<< std::endl;
     std::tuple<int,std::vector<double>, std::vector<double>, bool, int, bool> ret = line_fit_2(binary_image);
     detector.printTuple(ret);
+    std::vector<double> waypoints = detector.getWaypoints(ret,y_Values);
+    std::cout << "Waypoints are:"<< std::endl;
+    for (int value : waypoints) {
+        std::cout << value << " ";
+    }
+    std::cout << ""<< std::endl;
+    std::vector<double> right_1  = std::get<2>(ret);
     std::vector<double> left_1  = std::get<1>(ret);
-    plot_polynomial(left_1);
->>>>>>> 84d65cf9da401aca6c17e3eb9089193fb71819c9
+    plot_polynomial(right_1, left_1, waypoints, y_Values);
     cv::imshow("Binary Image", binary_image);
     cv::waitKey(0);
     return 0;

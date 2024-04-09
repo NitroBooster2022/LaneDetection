@@ -1,6 +1,7 @@
 #include <ros/ros.h>
 #include <opencv2/opencv.hpp>
 #include "interpolation.h"
+#include "stdafx.h"
 // #include <image_transport/image_transport.h>
 // #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/Image.h>
@@ -8,6 +9,10 @@
 #include <algorithm>
 #include <cmath>
 #include <tuple>
+
+
+// using namespace alglib;
+
 
 
 // Declare CAMERA_PARAMS as a constant global variable
@@ -199,16 +204,26 @@ std::vector<int> find_closest_pair(const std::vector<int>& indices, int lane_wid
     return result_pair;
 }
 
+std::vector<double> convertToArray(const alglib::real_1d_array& arr) {  // Convert between alglib 1d array and std::vector
+    std::vector<double> vec;        // Declare vector
+    int size = arr.length();        
+    vec.reserve(size);  
+    for (int i = 0; i < size; ++i) {    // Iterate over to to transform
+        vec.push_back(arr[i]);
+    }
+    return vec;
+}
+
 std::tuple<int,std::vector<double>, std::vector<double>, bool, int, bool> line_fit_2(cv::Mat binary_warped){
     // Declare variables to be used
     int lane_width = 350;        // HARD CODED LANE WIDTH
     int n_windows = 9;           // HARD CODED WINDOW NUMBER FOR LANE PARSING
     cv::Mat histogram;
-    int threshold = 5000;
+    int threshold = 5000;       // HARD CODED THRESHOLD
     int leftx_base = 0;
     int rightx_base = 640;
     std::tuple<int,std::vector<double>, std::vector<double>, bool, int, bool> ret;
-    // Tuple variables
+    // Tuple variables  --- Initialize and declare
     int number_of_fits = 0;
     std::vector<double> left_fit = {0.0};
     std::vector<double> right_fit = {0.0};
@@ -224,37 +239,43 @@ std::tuple<int,std::vector<double>, std::vector<double>, bool, int, bool> line_f
 
     stop_line = std::get<0>(stop_data);
 
-    if(stop_line){
+    if(stop_line){      // Check crosswalk only if there is a stop line 
         stop_index = std::get<1>(stop_data);
         cross_walk = check_cross_walk(binary_warped,stop_index);
     }
 
-    int size_indices = indices.size();
+    int size_indices = indices.size();      // Number of lanes detected
 
-    if(size_indices == 0){
+    if(size_indices == 0){                  // Check to see if lanes detected, if not return
         number_of_fits = 0;
         ret = std::make_tuple(number_of_fits,left_fit,right_fit,stop_line,stop_index,cross_walk);
         return ret;
     }
 
-    if(size_indices == 1){
-        if(indices[0] < 320){
+    if(size_indices == 1){                  // If only one lane line is detected
+        if(indices[0] < 320){               // Check on which side of the car it is
             number_of_fits = 1;      // NOTE : 1-LEFT FIT, 2- BOTH FITS, 3 - RIGHT FIT
             leftx_base = indices[0];
             rightx_base = 0;
         }
-        else {
+        else {                  
             number_of_fits = 3; // NOTE : 1-LEFT FIT, 2- BOTH FITS, 3 - RIGHT FIT
             leftx_base = 0;
             rightx_base = indices[0];
         }
     }
 
-    else {
-        std::vector<int> closest_pair = find_closest_pair(indices,lane_width);
-        leftx_base = closest_pair[0];
-        rightx_base = closest_pair[1];
-        number_of_fits = 2;
+    else {                      
+        if(size_indices > 2){   // If more than one lane line, check for closest pair of lane lines 
+            std::vector<int> closest_pair = find_closest_pair(indices,lane_width);
+            leftx_base = closest_pair[0];       // Initialize the start of the lane line at bottom of the screen
+            rightx_base = closest_pair[1];
+        }
+        else{
+            leftx_base = indices[0];       // Initialize the start of the lane line at bottom of the screen
+            rightx_base = indices[1];
+        }
+        number_of_fits = 2;                 // Set number of fits as a reference
     }
 
     int window_height = static_cast<int>(binary_warped.rows / n_windows);        // Caclulate height of parsing windows
@@ -262,7 +283,7 @@ std::tuple<int,std::vector<double>, std::vector<double>, bool, int, bool> line_f
     // Find nonzero pixel locations
     std::vector<cv::Point> nonzero;
 
-    cv::findNonZero(binary_warped, nonzero);
+    cv::findNonZero(binary_warped, nonzero);    // Find nonzero values in OpenCV point format
     
     // Separate x and y coordinates of nonzero pixels
     std::vector<int> nonzeroy, nonzerox;
@@ -282,91 +303,119 @@ std::tuple<int,std::vector<double>, std::vector<double>, bool, int, bool> line_f
     int minpix = 50;
 
     // Create empty vectors to receive left and right lane pixel indices
-    std::vector<int> left_lane_inds, right_lane_inds;
+    std::vector<int> left_lane_inds;
+    std::vector<int> right_lane_inds;
 
     for (int window = 0; window < n_windows; ++window) {
-    // Identify window boundaries in y
-    int win_y_low = binary_warped.rows - (window + 1) * window_height;
-    int win_y_high = binary_warped.rows - window * window_height;
+        // Identify window boundaries in y
+        int win_y_low = binary_warped.rows - (window + 1) * window_height;
+        int win_y_high = binary_warped.rows - window * window_height;
 
-    // LEFT LANE
+        // LEFT LANE
+        if (number_of_fits == 1 || number_of_fits == 2) {
+            int win_xleft_low = leftx_current - margin;     // Bounding boxes around the lane lines
+            int win_xleft_high = leftx_current + margin;
+
+            std::vector<int> good_left_inds;
+            for (size_t i = 0; i < nonzerox.size(); ++i) {  // Parse through and only select pixels within the bounding boxes
+                if (nonzeroy[i] >= win_y_low && nonzeroy[i] < win_y_high &&
+                    nonzerox[i] >= win_xleft_low && nonzerox[i] < win_xleft_high) {
+                    good_left_inds.push_back(i);            // Keep pixels within the boxes
+                }
+            }
+
+            left_lane_inds.insert(left_lane_inds.end(), good_left_inds.begin(), good_left_inds.end());      // Append all good indices together
+
+            if (good_left_inds.size() > minpix) {       // Recenter mean for the next bounding box
+                leftx_current = cvRound(cv::mean(cv::Mat(good_left_inds))[0]);  
+            }
+        }
+
+        // RIGHT LANE
+        if (number_of_fits == 3 || number_of_fits == 2) {
+            int win_xright_low = rightx_current - margin;   // Bounding boxes around the lane lines
+            int win_xright_high = rightx_current + margin;
+
+            std::vector<int> good_right_inds;
+            for (size_t i = 0; i < nonzerox.size(); ++i) {  // Parse through and only select pixels within the bounding boxes
+                if (nonzeroy[i] >= win_y_low && nonzeroy[i] < win_y_high &&
+                    nonzerox[i] >= win_xright_low && nonzerox[i] < win_xright_high) {
+                    good_right_inds.push_back(i);           // Keep pixels within the boxes
+                }
+            }
+
+            right_lane_inds.insert(right_lane_inds.end(), good_right_inds.begin(), good_right_inds.end());  // Append all good indices together
+
+            if (good_right_inds.size() > minpix) {          // Keep pixels within the boxes
+                rightx_current = cvRound(cv::mean(cv::Mat(good_right_inds))[0]);
+            }
+        }
+
+    }
+
+    // Declare vectors to contain the pixel coordinates to fit
+    std::vector<double> leftx;
+    std::vector<double> lefty;
+    std::vector<double> rightx;
+    std::vector<double> righty;
+    // Define the degree of the polynomial
+    int m = 2;
+
     if (number_of_fits == 1 || number_of_fits == 2) {
-        int win_xleft_low = leftx_current - margin;
-        int win_xleft_high = leftx_current + margin;
+        // Concatenate left_lane_inds if needed
+        // left_lane_inds = concatenate(left_lane_inds);
 
-        std::vector<int> good_left_inds;
-        for (size_t i = 0; i < nonzerox.size(); ++i) {
-            if (nonzeroy[i] >= win_y_low && nonzeroy[i] < win_y_high &&
-                nonzerox[i] >= win_xleft_low && nonzerox[i] < win_xleft_high) {
-                good_left_inds.push_back(i);
-            }
-        }
-
-        left_lane_inds.insert(left_lane_inds.end(), good_left_inds.begin(), good_left_inds.end());
-
-        if (good_left_inds.size() > minpix) {
-            leftx_current = cvRound(cv::mean(cv::Mat(good_left_inds))[0]);
-        }
-    }
-
-    // RIGHT LANE
-    if (number_of_fits == 3 || number_of_fits == 2) {
-        int win_xright_low = rightx_current - margin;
-        int win_xright_high = rightx_current + margin;
-
-        std::vector<int> good_right_inds;
-        for (size_t i = 0; i < nonzerox.size(); ++i) {
-            if (nonzeroy[i] >= win_y_low && nonzeroy[i] < win_y_high &&
-                nonzerox[i] >= win_xright_low && nonzerox[i] < win_xright_high) {
-                good_right_inds.push_back(i);
-            }
-        }
-
-        right_lane_inds.insert(right_lane_inds.end(), good_right_inds.begin(), good_right_inds.end());
-
-        if (good_right_inds.size() > minpix) {
-            rightx_current = cvRound(cv::mean(cv::Mat(good_right_inds))[0]);
-        }
-    }
-
-    }
-
-    // Polynomial fitting time
-    std::vector<int> leftx;
-    std::vector<int> lefty;
-
-    if (number_of_fits == 1 || number_of_fits == 2){
-        left_lane_inds = concatenate(left_lane_inds);
+        // Populate leftx and lefty vectors
         for (int idx : left_lane_inds) {
             leftx.push_back(nonzerox[idx]);
             lefty.push_back(nonzeroy[idx]);
         }
-        double t = 2;
-        ae_int_t m = 2
-        barycentricinterpolant poly_nom;
-        polynomialfitreport rep_ort;
-        double v;
-        polynomialfit(x, y, m, p, rep);
-        polynomialbar2pow(p, left_fit);
+
+        // Perform polynomial fitting
+        alglib::real_1d_array x_left, y_left;       // Declare alglib array type
+        x_left.setcontent(leftx.size(), leftx.data());  // Populate X array
+        y_left.setcontent(lefty.size(), lefty.data());  // Populate Y array
+        alglib::polynomialfitreport rep_left;
+        alglib::barycentricinterpolant p_left;  
+        alglib::polynomialfit(x_left, y_left, m, p_left, rep_left);     // Perform polynomial fit
+
+        // Convert polynomial coefficients to standard form
+        alglib::real_1d_array a1;
+        alglib::polynomialbar2pow(p_left, a1);
+        left_fit = convertToArray(a1);      // Convert back to std::vector 
+
     }
 
-    if (number_of_fits == 3 || number_of_fits == 2){
-            right_lane_inds = concatenate(right_lane_inds);
-            for (int idx : right_lane_inds) {
-                rightx.push_back(nonzerox[idx]);
-                righty.push_back(nonzeroy[idx]);
-            }
-            double t = 2;
-            ae_int_t m = 2
-            alglib::barycentricinterpolant poly_nom;
-            alglib::polynomialfitreport rep_ort;
-            double v;
-            alglib.polynomialfit(x, y, m, p, rep);
-            polynomialbar2pow(p, right_fit); 
-        }
-    
+    if (number_of_fits == 3 || number_of_fits == 2) {
+    // Concatenate right_lane_inds if needed
+    // left_lane_inds = concatenate(left_lane_inds);
 
+    // Populate rightx and righty vectors
+    for (int idx : right_lane_inds) {
+        rightx.push_back(nonzerox[idx]);
+        righty.push_back(nonzeroy[idx]);
+    }
 
+    // Perform polynomial fitting
+    alglib::real_1d_array x_right, y_right;     // Declare alglib array type
+    x_right.setcontent(rightx.size(), rightx.data());   // Populate X array
+    y_right.setcontent(righty.size(), righty.data());   // Populate Y array
+    alglib::polynomialfitreport rep_right; 
+    alglib::barycentricinterpolant p_right;
+    alglib::polynomialfit(x_right, y_right, m, p_right, rep_right);     // Perform polynomial fit
+
+    // Convert polynomial coefficients to standard form
+    alglib::real_1d_array a3;
+    alglib::polynomialbar2pow(p_right, a3);
+    right_fit = convertToArray(a3);     // Convert back to std::Vector 
+    }
+
+    // Make and return tuple of required values
+    ret = std::make_tuple(number_of_fits,left_fit,right_fit,stop_line,stop_index,cross_walk);
+    return ret;
 }
 
-
+int main() {
+    // Your code here
+    return 0;
+}
