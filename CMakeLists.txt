@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   image_transport
 )
+find_package(Python3 COMPONENTS Development)
 
 find_package(OpenCV REQUIRED)
 if(OpenCV_FOUND) 
@@ -128,10 +129,18 @@ catkin_package(
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
+
+#Set the python library path -- for jeston
+#set(Python3_LIBRARY /usr/bin/python3)
+
+
 include_directories(
 # include
   src/include
+  ${Python3_INCLUDE_DIRS}
   ${catkin_INCLUDE_DIRS}
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/alglib-cpp/src
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/matplotlib-cpp
 )
 
 ## Declare a C++ library
@@ -151,9 +160,12 @@ include_directories(
 # add_executable(camera
 #   src/camera.cpp
 # )
-# add_executable(lane
-#  src/lane.cpp
-# )
+add_executable(attemptLane_2
+ src/attemptLane_2.cpp
+)
+add_executable(line_fit_2
+ src/line_fit_2.cpp
+)
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
@@ -171,9 +183,22 @@ include_directories(
 # target_link_libraries(camera
 #   ${catkin_LIBRARIES}
 # )
-# target_link_libraries(lane
-#  ${catkin_LIBRARIES}
-# )
+target_link_libraries(attemptLane_2
+ ${catkin_LIBRARIES}
+)
+target_link_libraries(line_fit_2
+ ${catkin_LIBRARIES}
+)
+
+target_link_libraries(line_fit_2
+  alglib
+  )
+
+target_link_libraries(attemptLane_2
+  alglib
+  # matplotlib
+  ${Python3_LIBRARIES}
+)
 #############
 ## Install ##
 #############

@@ -1,6 +1,8 @@
+#!/usr/bin/env python3
+
 import numpy as np
 import cv2
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 # import matplotlib.image as mpimg
 import pickle
 
@@ -23,12 +25,48 @@ final = np.float32([[0,0],
                     [640,480]])
 
 # Compute the transformation matix
-transMatrix = cv2.getPerspectiveTransform(final, initial)
+transMatrix = cv2.getPerspectiveTransform(initial, final)
 
 # Camera matrix for accurate IPM transform
 cameraMatrix = np.array([[CAMERA_PARAMS['fx'], 0, CAMERA_PARAMS['cx']],
                          [0, CAMERA_PARAMS['fy'], CAMERA_PARAMS['cy']],
                          [0, 0, 1]])
+
+distCoeff = np.array([])
+
+
+# # ----- Declare global functions ------ # # 
+
+def getIPM(inputImage):
+    """
+    Calculate the inverse perspective transform of the input image
+
+    Parameters:
+    - input image
+    - Matrix with parameters of the camera
+    - Matrix with the desired perspective transform
+    Returns:
+     - Persepctive transformed image
+    """
+    undistortImage = cv2.undistort(inputImage, cameraMatrix, distCoeff)
+    dest_size = (inputImage.shape[1],inputImage.shape[0])
+    inverseMap = cv2.warpPerspective(undistortImage, transMatrix, dest_size, flags=cv2.INTER_LINEAR)
+    return inverseMap
+
+def getLanes(inputImage):
+    """
+    Compute the lane lines of a given input image
+
+    Parameters:
+    - Input image to compute edges for
+    Returns:
+    - Binary image of lane lines
+    """ 
+    imageHist = cv2.calcHist([inputImage], [0], None, [256], [0, 256])
+    threshold_value = np.clip(np.max(inputImage) - 75, 30, 200)
+    _, binary_thresholded = cv2.threshold(inputImage, threshold_value, 255, cv2.THRESH_BINARY)
+    return binary_thresholded
+
 
 def find_center_indices(hist, threshold):
 	"""
@@ -476,3 +514,15 @@ def viz3(binary_warped, non_warped, ret, waypoints, y_Values, IPM = True):
 
 # 	return result
 
+if __name__ == '__main__':
+	basic_image =  cv2.imread("/home/nash/Desktop/Simulator/src/LaneDetection/src/lane_image.png",cv2.IMREAD_GRAYSCALE)
+	roadImage = getIPM(basic_image)
+	binary_warped = getLanes(roadImage)
+	ret = line_fit(binary_warped)
+	left_fit = ret.get('left_fit', None)
+	right_fit = ret.get('right_fit', None)
+	print("left fit : " + str(left_fit))
+	print("right fit : " + str(right_fit))
+	cv2.imshow("ipm image",roadImage)
+	cv2.waitKey(0)
+	cv2.destroyAllWindows()
