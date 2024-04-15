@@ -228,7 +228,7 @@ class laneDetectNode():
             # print(ret)
             y_Values = np.array([10,50,100,150,200,250])
             wayPoint = getWaypoints(ret,y_Values)
-            gyu_img = viz3(getIPM(c_image),c_image, ret,wayPoint,y_Values, False)
+            gyu_img = viz3(getIPM(c_image),c_image, ret,wayPoint,y_Values, True)
             cv2.imshow("final preview", gyu_img)       # binary_warped = getLanes(roadImage)
             # cv2.imshow("Warped preview", binary_warped)
             # Publish waypoints corresponding to the IPM transformed image pixels
@@ -245,7 +245,7 @@ class laneDetectNode():
             wp5 = self.pixel_to_world(wayPoint[4],200)
             wp6 = self.pixel_to_world(wayPoint[5],250)
             waypoints.data = [wp1[1], -wp1[0], wp2[1], -wp2[0], wp3[1], -wp3[0], wp4[1], -wp4[0], wp5[1], -wp5[0], wp6[1], -wp6[0]]
-            self.waypoint_pub.publish(waypoints)
+            # self.waypoint_pub.publish(waypoints)
             # print(timeit.default_timer()-t1)
 
         # Convert IPM pixel coordinates to world coordinates (relative to camera)

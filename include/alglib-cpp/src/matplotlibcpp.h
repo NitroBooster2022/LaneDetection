@@ -28,8 +28,10 @@
  * define the ones we need here.
  */
 #  if CV_MAJOR_VERSION > 3
-#    define CV_BGR2RGB cv::COLOR_BGR2RGB
-#    define CV_BGRA2RGBA cv::COLOR_BGRA2RGBA
+// #    define CV_BGR2RGB cv::COLOR_BGR2RGB
+// #    define CV_BGRA2RGBA cv::COLOR_BGRA2RGBA
+#    define CV_BGR2RGB CV_BGR2RGB
+#    define CV_BGRA2RGBA CV_COLOR_BGRA2RGBA
 #  endif
 #endif // WITHOUT_NUMPY
 

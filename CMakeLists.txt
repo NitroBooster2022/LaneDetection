@@ -18,7 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 find_package(Python3 COMPONENTS Development)
 
-find_package(OpenCV REQUIRED)
+find_package(OpenCV 4.5 REQUIRED)
 if(OpenCV_FOUND) 
   message("found ${OpenCV_VERSION}, ${OpenCV_INCLUDE_DIRS}")
 else()

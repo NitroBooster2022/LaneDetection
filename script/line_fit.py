@@ -189,7 +189,7 @@ def line_fit(binary_warped):
 	out_img = (np.dstack((binary_warped, binary_warped, binary_warped))*255).astype('uint8')
 	# Find the peak of the left and right halves of the histogram
 	# These will be the starting point for the left and right lines
-	# midpoint = np.int(histogram.shape[0]/2)
+	# midpoint = int(histogram.shape[0]/2)
 	# leftx_base = np.argmax(histogram[0:midpoint])
 	# rightx_base = np.argmax(histogram[midpoint:]) + midpoint
 	# print(midpoint,leftx_base, rightx_base)
@@ -274,7 +274,7 @@ def line_fit(binary_warped):
 			left_lane_inds.append(good_left_inds)
 			# If you found > minpix pixels, recenter next window on their mean position
 			if len(good_left_inds) > minpix:
-				leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
+				leftx_current = int(np.mean(nonzerox[good_left_inds]))
 
 		# RIGHT LANE
 		if(ret['number_of_fits'] == 'right' or ret['number_of_fits'] == '2'):
@@ -285,7 +285,7 @@ def line_fit(binary_warped):
 			right_lane_inds.append(good_right_inds)
 			# If you found > minpix pixels, recenter next window on their mean position
 			if len(good_right_inds) > minpix:
-				rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
+				rightx_current = int(np.mean(nonzerox[good_right_inds]))
 
 		# Draw the windows on the visualization image
 		# cv2.rectangle(out_img,(win_xleft_low,win_y_low),(win_xleft_high,win_y_high),(0,255,0), 2)
@@ -448,9 +448,10 @@ def viz3(binary_warped, non_warped, ret, waypoints, y_Values, IPM = True):
 		return None;
 
 	if left_fitx is not None:
-		cv2.polylines(result, np.int32([np.column_stack((left_fitx, ploty))]), isClosed=False, color=(255, 255, 0), thickness=15)
+		cv2.polylines(result, [np.column_stack((left_fitx, ploty)).astype(np.int32)], isClosed=False, color=(255, 255, 0), thickness=15)
 	if right_fitx is not None:
-		cv2.polylines(result, np.int32([np.column_stack((right_fitx, ploty))]), isClosed=False, color=(255, 255, 0), thickness=15)
+		cv2.polylines(result, [np.column_stack((right_fitx, ploty)).astype(np.int32)], isClosed=False, color=(255, 255, 0), thickness=15)
+
 
 	for i in range(len(y_Values)):
 		# print(waypoints[i])
@@ -497,7 +498,7 @@ def viz3(binary_warped, non_warped, ret, waypoints, y_Values, IPM = True):
 # 	pts = np.hstack((pts_left, pts_right))
 
 # 	# Draw the lane onto the warped blank image
-# 	cv2.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
+# 	cv2.fillPoly(color_warp, int_([pts]), (0,255, 0))
 
 # 	# Warp the blank back to original image space using inverse perspective matrix (Minv)
 # 	newwarp = cv2.warpPerspective(color_warp, m_inv, (undist.shape[1], undist.shape[0]))
