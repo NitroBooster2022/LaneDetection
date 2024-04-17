@@ -163,6 +163,9 @@ include_directories(
 add_executable(attemptLane_2
  src/attemptLane_2.cpp
 )
+add_executable(attemptLane_static
+ src/attemptLane_static.cpp
+)
 add_executable(line_fit_2
  src/line_fit_2.cpp
 )
@@ -186,6 +189,11 @@ add_executable(line_fit_2
 target_link_libraries(attemptLane_2
  ${catkin_LIBRARIES}
 )
+
+target_link_libraries(attemptLane_static
+ ${catkin_LIBRARIES}
+)
+
 target_link_libraries(line_fit_2
  ${catkin_LIBRARIES}
 )
@@ -193,6 +201,12 @@ target_link_libraries(line_fit_2
 target_link_libraries(line_fit_2
   alglib
   )
+
+target_link_libraries(attemptLane_static
+alglib
+# matplotlib
+${Python3_LIBRARIES}
+)
 
 target_link_libraries(attemptLane_2
   alglib
