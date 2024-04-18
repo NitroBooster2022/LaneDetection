@@ -3,6 +3,7 @@
 // #include <image_transport/image_transport.h>
 // #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/Image.h>
+#include <std_msgs/Float64MultiArray.h>
 #include <chrono>
 // using namespace std::chrono;
 // #include "line_fit_2.h"
@@ -26,6 +27,7 @@ class LaneDetectNode_2{
         LaneDetectNode_2(ros::NodeHandle& nh) :
          it(nh){
             image_sub = it.subscribe("/camera/color/image_raw", 1, &LaneDetectNode_2::imageCallback, this);
+            depth_sub = it.subscribe("/camera/depth/image_raw", 1, &LaneDetectNode_2::depthCallback, this);
             // // image_pub = it.advertise("/automobile/image_modified", 1);
             lane_pub = nh.advertise<utils::Lane>("/lane", 1);
             // image = cv::Mat::zeros(480, 640, CV_8UC1);
@@ -40,11 +42,14 @@ class LaneDetectNode_2{
         ros::NodeHandle nh;
         image_transport::ImageTransport it;
         image_transport::Subscriber image_sub;
+        image_transport::Subscriber depth_sub;
         image_transport::Publisher image_pub;
         ros::Publisher lane_pub;
         cv_bridge::CvImagePtr cv_ptr;
+        cv_bridge::CvImagePtr cv_ptr_depth = nullptr;
+        cv::Mat normalizedDepthImage;
         std::vector<int> y_Values = {475,450,420,400,350,300};
-
+        cv::Mat depth_image;
 
         // Declare CAMERA_PARAMS as a constant global variable
         const std::map<std::string, double> CAMERA_PARAMS = {
@@ -72,6 +77,7 @@ class LaneDetectNode_2{
 
         // Compute the transformation matrix
         cv::Mat transMatrix = cv::getPerspectiveTransform(initial, final);
+        cv::Mat invMatrix = cv::getPerspectiveTransform(final, initial);
 
         // Define camera matrix for accurate IPM transform as a constant global variable
         const cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) <<
@@ -101,19 +107,88 @@ class LaneDetectNode_2{
             // ROS_INFO("Line fit done");
             // printTuple(ret);
             std::vector<double> waypoints = getWaypoints(ret,y_Values);
+            std::vector<float> waypoint_2;
             // std::cout << "Waypoints are:"<< std::endl;
-            for (int value : waypoints) {
+            for (double value : waypoint_2) {
                 std::cout << value << " ";
+                // waypoint_2 = pixel_to_world(wayPoint[value],y_Values[value]);
             }
-            std::cout << ""<< std::endl;
+            waypoint_2 = pixel_to_world(waypoints[0],y_Values[0], normalizedDepthImage);
+            // std::cout << "YES" << std::endl;
             std::vector<double> right_1  = std::get<2>(ret);
             std::vector<double> left_1  = std::get<1>(ret);
             // plot_polynomial(right_1, left_1, waypoints, y_Values);
-            cv::Mat gyu_img = viz3(ipm_color,color_image, ret, waypoints,y_Values);
+            cv::Mat gyu_img = viz3(ipm_color,color_image, ret, waypoints,y_Values, false);
             cv::imshow("Binary Image", gyu_img);
             cv::waitKey(1);
         }
+
+        void depthCallback(const sensor_msgs::ImageConstPtr &msg) {
+            double maxVal;
+            double minVal;
+            cv_ptr_depth = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_32FC1);
+            cv_ptr_depth->image.convertTo(normalizedDepthImage, CV_8U, 255.0 / (maxVal - minVal), -minVal * 255.0 / (maxVal - minVal));
+            if(cv_ptr_depth == nullptr || cv_ptr_depth->image.empty()) {
+                ROS_ERROR("cv_bridge failed to convert image");
+                return;
+            }
+            // std::cout << "-------------Depth done-----------------" << std::endl;
+            // try {
+            //     cv_ptr_depth = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_32FC1);
+            // } catch (cv_bridge::Exception &e) {
+            //     ROS_ERROR("cv_bridge exception: %s", e.what());
+            //     return;
+            // }
+        }
         
+        // void depthCallback(const sensor_msgs::Image::ConstPtr& msg) {
+        //     try {
+        //         cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_32FC1);
+        //     } catch (cv_bridge::Exception& e) {
+        //         ROS_ERROR("cv_bridge exception: %s", e.what());
+        //         return;
+        //     }
+        //     depth_image = cv_ptr_depth->image;
+        //     double min_val, max_val;
+        //     cv::minMaxLoc(depth_image, &min_val, &max_val);
+        //     cv::Mat normalized_depth_image = (depth_image - min_val) * 255.0 / (max_val - min_val);
+        //     std::cout << "Depth done" << std::endl;
+        // }
+
+
+
+        std::vector<float> pixel_to_world(double x,  double y, const cv::Mat& depth_image) {
+            double height = 0.16;
+            double roll = 0.15;
+            std::cout << "Started Pixel" << std::endl;
+            // Convert pixel coordinates using inverse perspective transform
+            cv::Mat pixel_coord = (cv::Mat_<float>(3,1) << x, y, 1);
+            cv::Mat pixel_2;
+            cv::warpPerspective(pixel_coord, pixel_2, invMatrix, pixel_coord.size(), cv::INTER_LINEAR);
+            // cv::Mat original_pixel_coord = transMatrix.inv() * pixel_coord;
+            std::cout << "no here" << std::endl;
+            std::cout << pixel_2<< std::endl;
+            // std::vector<double> original_pixel(pixel_2.at<float>(0, 0), pixel_2.at<float>(1, 0));
+            double depthy = pixel_2.at<float>(0);
+            // Access depth value from depth image
+            std::cout << depthy << std::endl;
+            // double depth_value = depth_image.at<double>(original_pixel[0], original_pixel[1]);
+            std::cout << "4 here" << std::endl;
+            // if (depth_value < 0.03) {
+            //     return std::vector<float>{0.0f, 0.0f}; // Return an empty array
+            // }
+            std::cout << "4 here" << std::endl;
+            // Calculate world coordinates
+            // double map_y = sqrt(pow(depth_value, 2) - pow(height, 2));
+            // double map_x = (original_pixel[0] - CAMERA_PARAMS.at("cx")) * depth_value / CAMERA_PARAMS.at("fx") + roll * depth_value;
+            // std::cout << "5 here" << std::endl;
+            // // Create vector and populate it with the world coordinates
+            std::vector<float> world_coords(2);
+            // world_coords[0] = static_cast<float>(map_x);
+            // world_coords[1] = static_cast<float>(map_y);
+            // std::cout << "Ended Pixel" << std::endl;
+            return world_coords;
+        }
         
         cv::Mat viz3(const cv::Mat& binary_warped,
             const cv::Mat& non_warped, 
@@ -184,7 +259,7 @@ class LaneDetectNode_2{
             if (!IPM) {
                 // Apply inverse perspective transform
                 cv::Mat result_ipm;
-                cv::warpPerspective(result, result_ipm, transMatrix, binary_warped.size(), cv::INTER_LINEAR);
+                cv::warpPerspective(result, result_ipm, invMatrix, binary_warped.size(), cv::INTER_LINEAR);
                 cv::addWeighted(result_ipm, 0.5, non_warped, 1, 0, result);
             }
 
@@ -221,7 +296,7 @@ class LaneDetectNode_2{
         }
 
 
-        cv::Mat getIPM(cv::Mat inputImage) {
+        cv::Mat getIPM(cv::Mat inputImage, bool rev = false) {
             cv::Mat undistortImage;
             cv::undistort(inputImage, undistortImage, cameraMatrix, distCoeff);
             cv::Mat inverseMap;
@@ -229,6 +304,8 @@ class LaneDetectNode_2{
             cv::warpPerspective(undistortImage, inverseMap, transMatrix, dest_size, cv::INTER_LINEAR);
             return inverseMap;
         }
+
+
 
         cv::Mat getLanes(cv::Mat inputImage) {
             cv::Mat imageHist;

@@ -265,10 +265,13 @@ def line_fit(binary_warped):
 		# Identify window boundaries in x and y (and right and left)
 		win_y_low = binary_warped.shape[0] - (window+1)*window_height
 		win_y_high = binary_warped.shape[0] - window*window_height
+		win_xright_low = rightx_current - margin
+		win_xright_high = rightx_current + margin
+		win_xleft_low = leftx_current - margin
+		win_xleft_high = leftx_current + margin
 		# LEFT LANE
 		if(ret['number_of_fits'] == 'left' or ret['number_of_fits'] == '2'):
-			win_xleft_low = leftx_current - margin
-			win_xleft_high = leftx_current + margin
+
 			good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xleft_low) & (nonzerox < win_xleft_high)).nonzero()[0]
 			# Append these indices to the lists
 			left_lane_inds.append(good_left_inds)
@@ -278,8 +281,6 @@ def line_fit(binary_warped):
 
 		# RIGHT LANE
 		if(ret['number_of_fits'] == 'right' or ret['number_of_fits'] == '2'):
-			win_xright_low = rightx_current - margin
-			win_xright_high = rightx_current + margin
 			good_right_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xright_low) & (nonzerox < win_xright_high)).nonzero()[0]
 			# Append these indices to the lists
 			right_lane_inds.append(good_right_inds)

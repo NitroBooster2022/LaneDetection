@@ -109,7 +109,7 @@ def getWaypoints(wayLines, y_Values):
     else:
             for i in range(len(y_Values)):
                  wayPoint[i] = 320
-    print(wayPoint)
+    # print(wayPoint)
     return wayPoint
 
 
@@ -125,11 +125,11 @@ class laneDetectNode():
             self.normalized_depth_image = np.zeros((640, 480))
             rospy.init_node('LaneAttemptnod', anonymous=True)
             self.image_sub = rospy.Subscriber("/camera/color/image_raw", Image, self.callback)
-            # self.waypoint_pub = rospy.Publisher("/lane/waypoints", Float32MultiArray, queue_size=3)
+            self.waypoint_pub = rospy.Publisher("/lane/waypoints", Float32MultiArray, queue_size=3)
             self.lane_pub = rospy.Publisher("/lane", Lane, queue_size=3)
-            # self.depth_sub = rospy.Subscriber("/camera/depth/image_raw", Image, self.depthcallback)
+            self.depth_sub = rospy.Subscriber("/camera/depth/image_raw", Image, self.depthcallback)
             # self.depth_sub = rospy.Subscriber("/camera/depth/image_rect_raw", Image, self.depthcallback)
-            # self.depth_sub = rospy.Subscriber("/camera/aligned_depth_to_color/image_raw", Image, self.depthcallback)
+            self.depth_sub = rospy.Subscriber("/camera/aligned_depth_to_color/image_raw", Image, self.depthcallback)
             self.detected = False  # did the fast line fit detect the lines?
             window_size = 2  # how many frames for line smoothing
             self.left_line = Line(n=window_size)
@@ -244,8 +244,9 @@ class laneDetectNode():
             wp4 = self.pixel_to_world(wayPoint[3],150)
             wp5 = self.pixel_to_world(wayPoint[4],200)
             wp6 = self.pixel_to_world(wayPoint[5],250)
+            print(wp1)
             waypoints.data = [wp1[1], -wp1[0], wp2[1], -wp2[0], wp3[1], -wp3[0], wp4[1], -wp4[0], wp5[1], -wp5[0], wp6[1], -wp6[0]]
-            # self.waypoint_pub.publish(waypoints)
+            self.waypoint_pub.publish(waypoints)
             # print(timeit.default_timer()-t1)
 
         # Convert IPM pixel coordinates to world coordinates (relative to camera)

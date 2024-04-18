@@ -11,10 +11,10 @@ class ControlNode():
         """
         rospy.init_node('CtrlAttemptnod', anonymous=True)
         self.waypoint_sub = rospy.Subscriber("/lane/waypoints", Float32MultiArray, self.callback, queue_size=3)
-        self.steer_pub = rospy.Publisher("/car1/command", String, queue_size=1)
+        self.steer_pub = rospy.Publisher("/automobile/command", String, queue_size=1)
         self.prev_error = 0
-        self.Proportional = 0.09
-        self.Differential = 0.10
+        self.Proportional = 50
+        self.Differential = 5
         print("Node started")
         rospy.spin()
 
@@ -23,10 +23,11 @@ class ControlNode():
         """
         Callback function for handling waypoint data.
         """
-        center = data.data[0]
-        error = 320 - center  
+        center = data.data[1]
+        # print(center)
+        error = 0.0985 + center  
         steer = -(self.Proportional * error + self.Differential * self.prev_error ** 2)
-        # print(steer)
+        print(steer)
         self.steer_pub.publish(String(data=f'{{"action": "2", "steerAngle": {steer}}}'))
 
 if __name__ == '__main__':
