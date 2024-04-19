@@ -13,8 +13,8 @@ class ControlNode():
         self.waypoint_sub = rospy.Subscriber("/lane/waypoints", Float32MultiArray, self.callback, queue_size=3)
         self.steer_pub = rospy.Publisher("/automobile/command", String, queue_size=1)
         self.prev_error = 0
-        self.Proportional = 50
-        self.Differential = 5
+        self.Proportional = 0.12
+        self.Differential = 0.095
         print("Node started")
         rospy.spin()
 
@@ -23,9 +23,9 @@ class ControlNode():
         """
         Callback function for handling waypoint data.
         """
-        center = data.data[1]
+        center = data.data[0]
         # print(center)
-        error = 0.0985 + center  
+        error = 320 - center  
         steer = -(self.Proportional * error + self.Differential * self.prev_error ** 2)
         print(steer)
         self.steer_pub.publish(String(data=f'{{"action": "2", "steerAngle": {steer}}}'))

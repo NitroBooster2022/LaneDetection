@@ -3,7 +3,7 @@
 // #include <image_transport/image_transport.h>
 // #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/Image.h>
-#include <std_msgs/Float64MultiArray.h>
+#include <std_msgs/Float32MultiArray.h>
 #include <chrono>
 // using namespace std::chrono;
 // #include "line_fit_2.h"
@@ -29,7 +29,7 @@ class LaneDetectNode_2{
             image_sub = it.subscribe("/camera/color/image_raw", 1, &LaneDetectNode_2::imageCallback, this);
             depth_sub = it.subscribe("/camera/depth/image_raw", 1, &LaneDetectNode_2::depthCallback, this);
             // // image_pub = it.advertise("/automobile/image_modified", 1);
-            lane_pub = nh.advertise<utils::Lane>("/lane", 1);
+            lane_pub = nh.advertise<std_msgs::Float32MultiArray>("/lane/waypoints", 1);
             // image = cv::Mat::zeros(480, 640, CV_8UC1);
             bool stopline = false;
             bool dotted = false;
@@ -107,17 +107,41 @@ class LaneDetectNode_2{
             // ROS_INFO("Line fit done");
             // printTuple(ret);
             std::vector<double> waypoints = getWaypoints(ret,y_Values);
-            std::vector<float> waypoint_2;
+            // std::vector<float> waypoint_2;
             // std::cout << "Waypoints are:"<< std::endl;
-            for (double value : waypoint_2) {
-                std::cout << value << " ";
+            // for (double value : waypoint_2) {
+            //     std::cout << value << " ";
                 // waypoint_2 = pixel_to_world(wayPoint[value],y_Values[value]);
-            }
-            waypoint_2 = pixel_to_world(waypoints[0],y_Values[0], normalizedDepthImage);
+            // }
+            // waypoint_2 = pixel_to_world(waypoints[0],y_Values[0], normalizedDepthImage);
             // std::cout << "YES" << std::endl;
             std::vector<double> right_1  = std::get<2>(ret);
             std::vector<double> left_1  = std::get<1>(ret);
             // plot_polynomial(right_1, left_1, waypoints, y_Values);
+            std_msgs::Float32MultiArray waypoints_msg;
+            std_msgs::MultiArrayDimension dimension;
+            // Set dimension label and size
+            dimension.label = "#ofwaypoints";
+            dimension.size = 1;
+            waypoints_msg.layout.dim.push_back(dimension);
+
+            // Populate data array with waypoints
+            waypoints_msg.data.push_back(waypoints[5]);
+            // waypoints_msg.data.push_back(-wp[0]);
+            // waypoints_msg.data.push_back(wp[1]);
+            // waypoints_msg.data.push_back(-wp[1]);
+            // waypoints_msg.data.push_back(wp[2]);
+            // waypoints_msg.data.push_back(-wp[2]);
+            // waypoints_msg.data.push_back(wp[3]);
+            // waypoints_msg.data.push_back(-wp[3]);
+            // waypoints_msg.data.push_back(wp[4]);
+            // waypoints_msg.data.push_back(-wp[4]);
+            // waypoints_msg.data.push_back(wp[5]);
+            // waypoints_msg.data.push_back(-wp[5]);
+
+            // Publish the message
+            lane_pub.publish(waypoints_msg);
+
             cv::Mat gyu_img = viz3(ipm_color,color_image, ret, waypoints,y_Values, false);
             cv::imshow("Binary Image", gyu_img);
             cv::waitKey(1);
@@ -253,14 +277,14 @@ class LaneDetectNode_2{
             //     cv::line(result, cv::Point(0, stop_index), cv::Point(639, stop_index), cv::Scalar(0, 0, 255), 2);
             // }
             if (IPM) {
-                cv::addWeighted(binary_warped, 0.5, result, 0.7, 0, result);
+                cv::addWeighted( result, 1,binary_warped, 0.95, 0, result);
             }
             
             if (!IPM) {
                 // Apply inverse perspective transform
                 cv::Mat result_ipm;
                 cv::warpPerspective(result, result_ipm, invMatrix, binary_warped.size(), cv::INTER_LINEAR);
-                cv::addWeighted(result_ipm, 0.5, non_warped, 1, 0, result);
+                cv::addWeighted( non_warped, 0.3,result_ipm, 0.95, 0, result);
             }
 
             // if (stop_line) {
@@ -326,7 +350,7 @@ class LaneDetectNode_2{
             int number_of_fits = std::get<0>(ret);
             std::vector<double> fit_L = std::get<1>(ret);
             std::vector<double> fit_R = std::get<2>(ret);
-            // std::cout << "Variables init:" << std::endl;
+            std::cout << "NUMBER OF FITS --- : " << number_of_fits << std::endl;
             if (number_of_fits == 2) {
                 for (size_t i = 0; i < y_Values.size(); ++i) {
                     L_x[i] = fit_L[0] + y_Values[i]*fit_L[1] + fit_L[2]*(y_Values[i])*(y_Values[i]);
@@ -336,14 +360,14 @@ class LaneDetectNode_2{
                 }
             } else if (number_of_fits == 1) {
                 for (size_t i = 0; i < y_Values.size(); ++i) {
-                    L_x[i] = 320 + fit_L[0] + y_Values[i]*fit_L[1] + fit_L[2]*(y_Values[i])*(y_Values[i]);
+                    L_x[i] = (offset - (480 - y_Values[i])*0.05) + fit_L[0] + y_Values[i]*fit_L[1] + fit_L[2]*(y_Values[i])*(y_Values[i]);
                     // std::cout << "Way: " << L_x[i] << std::endl;
                     wayPoint[i] = std::max(0.0, std::min(L_x[i], 639.0));
                     // std::cout << "After: " << wayPoint[i] << std::endl;
                 }
             } else if (number_of_fits == 3) {
                 for (size_t i = 0; i < y_Values.size(); ++i) {
-                    R_x[i] = - 320 + fit_R[0] + y_Values[i]*fit_R[1] + fit_R[2]*(y_Values[i])*(y_Values[i]);
+                    R_x[i] = - (offset - (480 - y_Values[i])*0.08) + fit_R[0] + y_Values[i]*fit_R[1] + fit_R[2]*(y_Values[i])*(y_Values[i]);
                     wayPoint[i] = std::max(0.0, std::min(R_x[i], 639.0));
                 }
             // } else if (wayLines["stop_line"] == "0") {
@@ -593,6 +617,7 @@ class LaneDetectNode_2{
                         min_diff = current_diff;        // compare current pair difference with optimal difference
                         result_pair[0] = indices[i];
                         result_pair[1] = indices[j];
+                        std::cout << "Min DIff: " << min_diff << std::endl;
                     }
                 }
             }
@@ -633,12 +658,12 @@ class LaneDetectNode_2{
             std::tuple<bool, int, int> stop_data = find_stop_line(binary_warped, threshold);    // Get the stop line data
             std::cout << "Stop line done "<< std::endl;
             std::vector<int> indices = find_center_indices(histogram, threshold);               // Get the center indices
-            // std::cout << "Center indices are:"<< std::endl;
-            // for (int value : indices) {
-            //     std::cout << value << " ";
-            // }
-            // std::cout << ""<< std::endl;
-            // std::cout << "Center indices done"<< std::endl;
+            std::cout << "Center indices are:"<< std::endl;
+            for (int value : indices) {
+                std::cout << value << " ";
+            }
+            std::cout << ""<< std::endl;
+            std::cout << "Center indices done"<< std::endl;
             stop_line = std::get<0>(stop_data);
 
             if(stop_line){      // Check crosswalk only if there is a stop line 
@@ -670,19 +695,37 @@ class LaneDetectNode_2{
             else {                      
                 if(size_indices > 2){   // If more than one lane line, check for closest pair of lane lines 
                     std::vector<int> closest_pair = find_closest_pair(indices,lane_width);
-                    leftx_base = closest_pair[0];       // Initialize the start of the lane line at bottom of the screen
-                    rightx_base = closest_pair[1];
+                    indices[0] = closest_pair[0];       // Initialize the start of the lane line at bottom of the screen
+                    indices[1] = closest_pair[1];
+                }
+                int delta = std::abs(indices[0]-indices[1]);        // Check to see if the two lane lines are close enough to be the same
+                if(delta < 160){
+                    indices[0] = 0.5*(indices[0]+indices[1]);
+                    std::cout << "Delta : " << delta << std::endl;
+                    std::cout << "Base[0] : " << indices[0] << std::endl;
+                    if(indices[0] < 320){
+                        number_of_fits = 1;      // NOTE : 1-LEFT FIT, 2- BOTH FITS, 3 - RIGHT FIT
+                        leftx_base = indices[0];
+                        rightx_base = 0;
+                    }
+                    else{
+                        number_of_fits = 3; // NOTE : 1-LEFT FIT, 2- BOTH FITS, 3 - RIGHT FIT
+                        leftx_base = 0;
+                        rightx_base = indices[0];  
+                    }
                 }
                 else{
-                    leftx_base = indices[0];       // Initialize the start of the lane line at bottom of the screen
-                    rightx_base = indices[1];
-                }
+                leftx_base = indices[0];       // Initialize the start of the lane line at bottom of the screen
+                rightx_base = indices[1];
                 number_of_fits = 2;                 // Set number of fits as a reference
+                }
+
             }
 
-            // std::cout << "Left Base : " << leftx_base << std::endl;
-            // std::cout << "Right Base : " << rightx_base << std::endl;
-            // std::cout << "Chosen the right number of fits done"<< std::endl;
+            std::cout << "Left Base : " << leftx_base << std::endl;
+            std::cout << "Right Base : " << rightx_base << std::endl;
+            std::cout << "NUMBER OF FITS : " << number_of_fits << std::endl;
+            std::cout << "Chosen the right number of fits done"<< std::endl;
 
             int window_height = static_cast<int>(binary_warped.rows / n_windows);        // Caclulate height of parsing windows
             // std::cout << "Window hieght: " << window_height << std::endl;
@@ -802,13 +845,13 @@ class LaneDetectNode_2{
                     leftx.push_back(nonzerox[idx]);
                     lefty.push_back(nonzeroy[idx]);            
                 }
-                // plt::plot(leftx, lefty,".");
-                // plt::xlabel("x");
-                // plt::ylabel("y");
-                // plt::ylim(479,0);
-                // plt::xlim(0,639);
-                // plt::title("Plot of Polynomial");
-                // plt::grid(true);
+                plt::plot(leftx, lefty,".");
+                plt::xlabel("x");
+                plt::ylabel("y");
+                plt::ylim(479,0);
+                plt::xlim(0,639);
+                plt::title("Plot of Polynomial");
+                plt::grid(true);
                 
 
                 // Perform polynomial fitting
@@ -816,14 +859,15 @@ class LaneDetectNode_2{
                 x_left.setcontent(leftx.size(), leftx.data());  // Populate X array
                 y_left.setcontent(lefty.size(), lefty.data());  // Populate Y array
                 alglib::polynomialfitreport rep_left;
-                alglib::barycentricinterpolant p_left;  
+                alglib::barycentricinterpolant p_left;
+                std::cout << "Before fit"<< std::endl;
                 alglib::polynomialfit(y_left, x_left, m, p_left, rep_left);     // Perform polynomial fit
-
+                std::cout << "After fit"<< std::endl;
                 // Convert polynomial coefficients to standard form
                 alglib::real_1d_array a1;
                 alglib::polynomialbar2pow(p_left, a1);
                 left_fit = convertToArray(a1);      // Convert back to std::vector 
-
+                std::cout << "Alglib done"<< std::endl;
             }
 
             // std::cout << "left polynomial fit done "<< std::endl;
@@ -837,8 +881,14 @@ class LaneDetectNode_2{
                     rightx.push_back(nonzerox[idx]);
                     righty.push_back(nonzeroy[idx]);
                 }
-
-                // plt::plot(rightx, righty);
+                plt::xlabel("x");
+                plt::ylabel("y");
+                plt::ylim(479,0);
+                plt::xlim(0,639);
+                plt::title("Plot of Polynomial");
+                plt::grid(true);
+                plt::plot(rightx, righty);
+                // plt::show();
 
                 // Perform polynomial fitting
                 alglib::real_1d_array x_right, y_right;             // Declare alglib array type
@@ -846,12 +896,14 @@ class LaneDetectNode_2{
                 y_right.setcontent(righty.size(), righty.data());   // Populate Y array
                 alglib::polynomialfitreport rep_right; 
                 alglib::barycentricinterpolant p_right;
+                std::cout << "Before fit"<< std::endl;
                 alglib::polynomialfit(y_right, x_right, m, p_right, rep_right);     // Perform polynomial fit
-
+                std::cout << "After fit"<< std::endl;
                 // Convert polynomial coefficients to standard form
                 alglib::real_1d_array a3;
                 alglib::polynomialbar2pow(p_right, a3);
                 right_fit = convertToArray(a3);     // Convert back to std::Vector 
+                std::cout << "Alglib done"<< std::endl;
             }
 
             // std::cout << "right polynomial fit done"<< std::endl;
