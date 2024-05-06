@@ -208,7 +208,8 @@ class LaneDetectNode_2{
             const std::tuple<int, std::vector<double>, std::vector<double>, bool, int, bool>& ret, 
             const std::vector<double> waypoints, 
             const std::vector<int>& y_Values, 
-            bool IPM = true) 
+            bool IPM = true,
+            double elapsed_time = 100.0) 
 
          {
             // Grab variables from ret tuple
@@ -275,6 +276,9 @@ class LaneDetectNode_2{
                 cv::warpPerspective(result, result_ipm, invMatrix, binary_warped.size(), cv::INTER_LINEAR);
                 cv::addWeighted( non_warped, 0.3,result_ipm, 0.95, 0, result);
             }
+
+            std::string elapsed_time_str = std::to_string(elapsed_time);
+            cv::putText(result, elapsed_time_str, cv::Point(64, 48), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(255, 255, 255), 1, cv::LINE_AA);
 
             // if (stop_line) {
             //     cv::putText(result, "Stopline detected!", cv::Point(64, 48), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(255, 255, 255), 1, cv::LINE_AA);
@@ -731,9 +735,10 @@ class LaneDetectNode_2{
 
             // Separate x and y coordinates of nonzero pixels
             std::vector<int> nonzeroy, nonzerox;
-            for (const auto& point : nonzero) {
-                nonzeroy.push_back(point.y);
-                nonzerox.push_back(point.x);
+            for (size_t i = 0; i < nonzero.size(); i += 3) { // Increment index by 2
+                nonzeroy.push_back(nonzero[i].y);
+                nonzerox.push_back(nonzero[i].x);
+
             }
 
             // Current positions to be updated for each window
@@ -998,6 +1003,7 @@ int main(int argc, char **argv) {
 
     long totalFrames = static_cast<long>(cap.get(cv::CAP_PROP_FRAME_COUNT));
     long currentFrame = 0;
+    ros::Time::init();
 
     cv::Mat frame, resizedFrame, croppedFrame;
     while (true) {
@@ -1010,14 +1016,17 @@ int main(int argc, char **argv) {
         cv::resize(frame, resizedFrame, cv::Size(640, 480));
 
         // Perform lane detection and visualization
+        ros::Time start_time = ros::Time::now(); 
          cv::cvtColor(resizedFrame, frame, cv::COLOR_BGR2GRAY);
         croppedFrame = detector.getIPM(frame);
         frame = detector.getLanes(croppedFrame);
         std::tuple<int,std::vector<double>, std::vector<double>, bool, int, bool> ret = detector.line_fit_2(frame);
         std::vector<int> y_Values = {475,450,420,400,350,300};
         std::vector<double> waypoints = detector.getWaypoints(ret, y_Values);
-        croppedFrame = detector.viz3(resizedFrame, resizedFrame, ret, waypoints, y_Values, false);
-
+        ros::Time end_time = ros::Time::now();
+        ros::Duration elapsed_time = end_time - start_time;
+        double elapsed_time_double = elapsed_time.toSec();
+        croppedFrame = detector.viz3(resizedFrame, resizedFrame, ret, waypoints, y_Values, false, elapsed_time_double);
         // Write the processed frame to the output video
         writer.write(croppedFrame);
         

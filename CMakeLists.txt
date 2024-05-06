@@ -172,6 +172,9 @@ add_executable(line_fit_2
 add_executable(videoDetector
  src/videoDetector.cpp
 )
+add_executable(barebones_Lane
+ src/barebones_Lane.cpp
+)
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
@@ -205,6 +208,11 @@ target_link_libraries(videoDetector
  ${catkin_LIBRARIES}
 )
 
+target_link_libraries(barebones_Lane
+ ${catkin_LIBRARIES}
+)
+
+
 target_link_libraries(line_fit_2
   alglib
   )
@@ -222,6 +230,12 @@ target_link_libraries(attemptLane_2
 )
 
 target_link_libraries(videoDetector
+  alglib
+  # matplotlib
+  ${Python3_LIBRARIES}
+)
+
+target_link_libraries(barebones_Lane
   alglib
   # matplotlib
   ${Python3_LIBRARIES}
