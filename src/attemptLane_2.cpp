@@ -55,6 +55,9 @@ class LaneDetectNode_2{
         cv::Mat image_cont_3;
         std::tuple<int,std::vector<double>, std::vector<double>, bool, int, bool> ret;
         std::vector<double> waypoints;
+        int threshold_2 = 2000;
+        bool stop_line = false;
+        int stop_loc = -1;
 
         // Declare CAMERA_PARAMS as a constant global variable
         const std::map<std::string, double> CAMERA_PARAMS = {
@@ -133,17 +136,6 @@ class LaneDetectNode_2{
 
             // Populate data array with waypoints
             waypoints_msg.data.push_back(waypoints[5]);
-            // waypoints_msg.data.push_back(-wp[0]);
-            // waypoints_msg.data.push_back(wp[1]);
-            // waypoints_msg.data.push_back(-wp[1]);
-            // waypoints_msg.data.push_back(wp[2]);
-            // waypoints_msg.data.push_back(-wp[2]);
-            // waypoints_msg.data.push_back(wp[3]);
-            // waypoints_msg.data.push_back(-wp[3]);
-            // waypoints_msg.data.push_back(wp[4]);
-            // waypoints_msg.data.push_back(-wp[4]);
-            // waypoints_msg.data.push_back(wp[5]);
-            // waypoints_msg.data.push_back(-wp[5]);
 
             // Publish the message
             lane_pub.publish(waypoints_msg);
@@ -152,8 +144,8 @@ class LaneDetectNode_2{
             ros::Time end_time = ros::Time::now();
             ros::Duration elapsed_time = end_time - start_time;
             double elapsed_time_double = elapsed_time.toSec();
-    
-            cv::Mat gyu_img = viz3(image_cont_1,color_image, ret, waypoints,y_Values, false, elapsed_time_double);
+            stop_loc = find_stop_line(image_cont_3,threshold_2);
+            cv::Mat gyu_img = viz3(image_cont_1,color_image, ret, waypoints,y_Values, stop_loc, false, elapsed_time_double);
             cv::imshow("Binary Image", gyu_img);
             cv::waitKey(1);
 
@@ -235,7 +227,8 @@ class LaneDetectNode_2{
             const cv::Mat& non_warped, 
             const std::tuple<int, std::vector<double>, std::vector<double>, bool, int, bool>& ret, 
             const std::vector<double> waypoints, 
-            const std::vector<int>& y_Values, 
+            const std::vector<int>& y_Values,
+            int stop_index = -1,
             bool IPM = true,
             double elapsed_time = 100.0) 
 
@@ -290,10 +283,11 @@ class LaneDetectNode_2{
                 cv::circle(result, cv::Point(x, y), 5, cv::Scalar(0, 0, 255), -1);
             }
 
-            // // Draw stop line
-            // if (stop_line) {
-            //     cv::line(result, cv::Point(0, stop_index), cv::Point(639, stop_index), cv::Scalar(0, 0, 255), 2);
-            // }
+            // Draw stop line
+            if (stop_index >= 0) {
+                cv::line(result, cv::Point(0, stop_index), cv::Point(639, stop_index), cv::Scalar(0, 0, 255), 2);
+            }
+
             if (IPM) {
                 cv::addWeighted( result, 1,binary_warped, 0.95, 0, result);
             }
@@ -307,9 +301,10 @@ class LaneDetectNode_2{
             std::string elapsed_time_str = std::to_string(elapsed_time);
             cv::putText(result, elapsed_time_str, cv::Point(64, 48), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(255, 255, 255), 1, cv::LINE_AA);
 
-            // if (stop_line) {
-            //     cv::putText(result, "Stopline detected!", cv::Point(64, 48), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(255, 255, 255), 1, cv::LINE_AA);
-            // }
+            if (stop_index >= 0) {
+                cv::putText(result, "Stop detected!", cv::Point(500, 48), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(255, 255, 255), 1, cv::LINE_AA);
+
+            }
 
             // if (cross_walk) {
             //     cv::putText(result, "Crosswalk detected!", cv::Point(128, 96), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(255, 255, 255), 1, cv::LINE_AA);
@@ -490,29 +485,12 @@ class LaneDetectNode_2{
                 i = j;
             }
 
-            // for (const std::vector<int>& group : consecutive_groups) {
-            //     std::cout << "Consecutive Group:";
-            //     for (int value : group) {
-            //         std::cout << " " << value;
-            //     }
-            //     std::cout << std::endl;
-            // }
-
             // Iterate over consecutive_groups and find ones that are five continuous pixels or more
             for (const std::vector<int>& group : consecutive_groups) {
                 if (group.size() >= 5) {
                     valid_groups.push_back(group);
                 }
             }
-
-
-            // for (const std::vector<int>& group : valid_groups) {
-            //     std::cout << "Valid Group:";
-            //     for (int value : group) {
-            //         std::cout << " " << value;
-            //     }
-            //     std::cout << std::endl;
-            // }
 
             // Find the center index for each valid group
             std::vector<int> center_indices;
@@ -529,71 +507,52 @@ class LaneDetectNode_2{
             return center_indices;
         }
 
-        std::tuple<bool, int, int> find_stop_line(const cv::Mat& image, int threshold) { // Function to identify presence of stop line
-
-            // NOTE : CAN BE OPTIMIZED BY COMBINING VERTICAL HISTOGRAM WITH find_center_indices, reduce one histogram computation
-            // Maybe modify the return values to conform with what is needed
-
-            // Find indices where histogram values are above the threshold
-            std::cout << "Starting reduce "<< std::endl;
-            cv::Mat histogram;
-            cv::reduce(image(cv::Range(0, 480), cv::Range::all()) / 2, histogram, 0, cv::REDUCE_SUM, CV_32S);
-            // std::cout << "Histogram done "<< std::endl;
-            
-            std::vector<int> above_threshold;       // Container for values above threshold
-
-            for (int i = 0; i < histogram.cols; ++i) {      // Iterate over histogram values
-                if (histogram.at<int>(0, i) > threshold) {
-                    above_threshold.push_back(i);           // Retain values above threshold
-                }
-            }
-
-            // Find consecutive groups of five or more indices
-            std::vector<std::vector<int>> consecutive_groups;       // Container for continuous pixel groups
-
-            for (int i = 0; i < above_threshold.size();) {          // Iterate over pixels above the threshold
-                int j = i;
-                while (j < above_threshold.size() && above_threshold[j] - above_threshold[i] == j - i) {
-                    ++j;
-                }
-                if (j - i >= 5) {
-                    consecutive_groups.push_back(std::vector<int>(above_threshold.begin() + i, above_threshold.begin() + j));       // Retain groups of continuous pixels
-                }
-                i = j;
-            }
-
-            // std::cout << "Consecutive done "<< std::endl;
-
-            // Find the maximum index of the horizontal histogram
-            // This is because the stop line will be a section of a lot of white pixels, i.e. the max of the histogram horizontally
-
+        int find_stop_line(const cv::Mat& image, int threshold) { // Function to identify presence of stop line
+            int width = 370;
+            stop_line = false;
+            int stop_loc = -1;
             cv::Mat horistogram;
-            cv::reduce(image(cv::Range::all(), cv::Range(0, 640)) / 2, horistogram, 1, cv::REDUCE_SUM, CV_32S);
-            cv::Point max_loc;
-            cv::minMaxLoc(horistogram, nullptr, nullptr, nullptr, &max_loc);
+            cv::Mat roi = image(cv::Range::all(), cv::Range(0, 639));
+            cv::reduce(roi/ 2, horistogram, 1, cv::REDUCE_SUM, CV_32S);
+            double min_val, max_val;
+            cv::Point min_loc, max_loc;
+            cv::minMaxLoc(horistogram, &min_val, &max_val, &min_loc, &max_loc);
+            std::cout << "Max loc done :  "<< max_loc << std::endl;
 
-            // std::cout << "Max loc done "<< std::endl;
+            std::vector<double> hist;
+            std::cout << horistogram.rows << std::endl;
+            horistogram = image.row(max_loc.y);
+            for (int i = 0; i < horistogram.cols; ++i) {
+                hist.push_back(static_cast<double>(horistogram.at<uchar>(i)));
+            }
+            std::cout << "Hist size :  "<< hist.size() << std::endl;
+            int sum = 0;
+            for(int i =0; i < hist.size(); i++){
+                // std::cout << "Value is : " << hist[i] << std::endl;
+            }
+            
+            for(int i =0; i < hist.size(); i++){
+                sum+= 1;
+                if(hist[i] < 1){
+                    sum = 0;
+                }
+                else if( sum >= 370){
+                    stop_line = true;
+                    break;
+                }
+            }
+            std::cout << "Total sum :  "<< sum << std::endl;
 
-            // Check to see if there is a sequence of pixels long enough for a stop line
-            bool stop_line = false;
-            int width = 0;
-            // for (const auto& group : consecutive_groups) {  
-            //     if (group.size() >= 370) {                  // NOTE: HARD CODED VALUE for the stop line width
-            //         stop_line = true;
-            //         cv::Mat above_threshold2;
-            //         cv::threshold(horistogram, above_threshold2, 50000, 255, cv::THRESH_BINARY); // causes problems
-            //         std::vector<cv::Point> non_zero_indices;
-            //         cv::findNonZero(above_threshold2, non_zero_indices);
-            //         if (!non_zero_indices.empty()) {
-            //             width = abs(non_zero_indices.back().y - non_zero_indices.front().y);
-            //         }
-            //         break;
-            //     }
-            // }
+            if(stop_line == true){
+                stop_loc = max_loc.y;
+            }
+            else{
+                stop_loc =-1;
+            }
 
-            // std::cout << "Stop line check done "<< std::endl;
+            std::cout << "Stop line check done "<< std::endl;
 
-            return std::make_tuple(stop_line, max_loc.y, width);
+            return stop_loc;
         }
 
         bool check_cross_walk(const cv::Mat& image, int stop_index) {
@@ -675,7 +634,7 @@ class LaneDetectNode_2{
             // displayHistogram(histogram);
             std::cout << "Reduce done "<< std::endl;
             std::cout << "Histogram Data: " << histogram.size() << std::endl;
-            std::tuple<bool, int, int> stop_data = find_stop_line(binary_warped, threshold);    // Get the stop line data
+            // std::tuple<bool, int, int> stop_data = find_stop_line(binary_warped, threshold);    // Get the stop line data
             std::cout << "Stop line done "<< std::endl;
             std::vector<int> indices = find_center_indices(histogram, threshold);               // Get the center indices
             std::cout << "Center indices are:"<< std::endl;
@@ -684,12 +643,12 @@ class LaneDetectNode_2{
             }
             std::cout << ""<< std::endl;
             std::cout << "Center indices done"<< std::endl;
-            stop_line = std::get<0>(stop_data);
+            // stop_line = std::get<0>(stop_data);
 
-            if(stop_line){      // Check crosswalk only if there is a stop line 
-                stop_index = std::get<1>(stop_data);
-                cross_walk = check_cross_walk(binary_warped,stop_index);
-            }
+            // if(stop_line){      // Check crosswalk only if there is a stop line 
+            //     stop_index = std::get<1>(stop_data);
+            //     cross_walk = check_cross_walk(binary_warped,stop_index);
+            // }
             // std::cout << "Cross walk done"<< std::endl;
             int size_indices = indices.size();      // Number of lanes detected
 

@@ -39,6 +39,8 @@ class LaneDetectNode_2{
                 rate.sleep();
             }
         }
+
+        // ROS OBJECTS
         ros::NodeHandle nh;
         image_transport::ImageTransport it;
         image_transport::Subscriber image_sub;
@@ -57,6 +59,7 @@ class LaneDetectNode_2{
         cv::Mat image_cont_3;
         cv::Mat grayscale_image;
         cv::Mat color_image;
+        cv::Mat horistogram;
 
         // VECTOR CONTAINERS
         std::tuple<int,std::vector<double>, std::vector<double>, bool, int, bool> ret;
@@ -86,6 +89,9 @@ class LaneDetectNode_2{
         bool stop_line = false;
         int stop_index = 0;
         bool cross_walk = false;
+        int width = 370;
+        int stop_loc = -1;
+
 
         // Declare CAMERA_PARAMS as a constant global variable
         const std::map<std::string, double> CAMERA_PARAMS = {
@@ -148,14 +154,7 @@ class LaneDetectNode_2{
             // ROS_INFO("Line fit done");
             // printTuple(ret);
             waypoints = getWaypoints(ret,y_Values);
-            // std::vector<float> waypoint_2;
-            // std::cout << "Waypoints are:"<< std::endl;
-            // for (double value : waypoint_2) {
-            //     std::cout << value << " ";
-                // waypoint_2 = pixel_to_world(wayPoint[value],y_Values[value]);
-            // }
-            // waypoint_2 = pixel_to_world(waypoints[0],y_Values[0], normalizedDepthImage);
-            // std::cout << "YES" << std::endl;
+
             right_1  = std::get<2>(ret);
             left_1  = std::get<1>(ret);
             // plot_polynomial(right_1, left_1, waypoints, y_Values);
@@ -166,17 +165,6 @@ class LaneDetectNode_2{
 
             // Populate data array with waypoints
             waypoints_msg.data.push_back(waypoints[5]);
-            // waypoints_msg.data.push_back(-wp[0]);
-            // waypoints_msg.data.push_back(wp[1]);
-            // waypoints_msg.data.push_back(-wp[1]);
-            // waypoints_msg.data.push_back(wp[2]);
-            // waypoints_msg.data.push_back(-wp[2]);
-            // waypoints_msg.data.push_back(wp[3]);
-            // waypoints_msg.data.push_back(-wp[3]);
-            // waypoints_msg.data.push_back(wp[4]);
-            // waypoints_msg.data.push_back(-wp[4]);
-            // waypoints_msg.data.push_back(wp[5]);
-            // waypoints_msg.data.push_back(-wp[5]);
 
             // Publish the message
             lane_pub.publish(waypoints_msg);
@@ -191,9 +179,6 @@ class LaneDetectNode_2{
             // Print elapsed time in seconds
             ROS_INFO("Elapsed time: %.3f seconds", elapsed_time.toSec());
 
-            // cv::Mat gyu_img = viz3(image_cont_1,color_image, ret, waypoints,y_Values, false);
-            // cv::imshow("Binary Image", gyu_img);
-            // cv::waitKey(1);
         }
 
         void depthCallback(const sensor_msgs::ImageConstPtr &msg) {
@@ -227,7 +212,6 @@ class LaneDetectNode_2{
         // }
 
 
-
         std::vector<float> pixel_to_world(double x,  double y, const cv::Mat& depth_image) {
             std::cout << "Started Pixel" << std::endl;
             // Convert pixel coordinates using inverse perspective transform
@@ -257,113 +241,7 @@ class LaneDetectNode_2{
             // std::cout << "Ended Pixel" << std::endl;
             return world_coords;
         }
-        
-        cv::Mat viz3(const cv::Mat& binary_warped,
-            const cv::Mat& non_warped, 
-            const std::tuple<int, std::vector<double>, std::vector<double>, bool, int, bool>& ret, 
-            const std::vector<double> waypoints, 
-            const std::vector<int>& y_Values, 
-            bool IPM = true) 
-
-         {
-            // Grab variables from ret tuple
-            auto left_fit = std::get<1>(ret);
-            auto right_fit = std::get<2>(ret);
-            auto number_of_fit = std::get<0>(ret);
-
-            // Generate y values for plotting
-            std::vector<double> ploty;
-            for (int i = 0; i < binary_warped.rows; ++i) {
-                ploty.push_back(i);
-            }
-
-            // Create an empty image
-            cv::Mat result(binary_warped.size(), CV_8UC3, cv::Scalar(0, 0, 0));
-
-            // Update values only if they are not None
-            std::vector<double> left_fitx, right_fitx;
-            if (number_of_fit == 1 || number_of_fit == 2) {
-                for (double y : ploty) {
-                    left_fitx.push_back(left_fit[0] + y * left_fit[1] + left_fit[2] * (y*y));
-                }
-            }
-            if (number_of_fit == 3 || number_of_fit == 2) {
-                for (double y : ploty) {
-                    right_fitx.push_back(right_fit[0] + y * right_fit[1] + right_fit[2] * (y*y));
-
-                }
-            }
-
-            if (number_of_fit == 1 || number_of_fit == 2) {
-                std::vector<cv::Point> left_points;
-                for (size_t i = 0; i < left_fitx.size(); ++i) {
-                    left_points.push_back(cv::Point(left_fitx[i], ploty[i]));
-                }
-                cv::polylines(result, left_points, false, cv::Scalar(255, 255, 0), 15);
-            }
-            if (number_of_fit == 3 || number_of_fit == 2) {
-                std::vector<cv::Point> right_points;
-                for (size_t i = 0; i < right_fitx.size(); ++i) {
-                    right_points.push_back(cv::Point(right_fitx[i], ploty[i]));
-                }
-                cv::polylines(result, right_points, false, cv::Scalar(255, 255, 0), 15);
-            }
-
-            // Draw waypoints
-            for (size_t i = 0; i < y_Values.size(); ++i) {
-                int x = static_cast<int>(waypoints[i]);
-                int y = y_Values[i];
-                cv::circle(result, cv::Point(x, y), 5, cv::Scalar(0, 0, 255), -1);
-            }
-
-            // // Draw stop line
-            // if (stop_line) {
-            //     cv::line(result, cv::Point(0, stop_index), cv::Point(639, stop_index), cv::Scalar(0, 0, 255), 2);
-            // }
-            if (IPM) {
-                cv::addWeighted( result, 1,binary_warped, 0.95, 0, result);
-            }
-            
-            if (!IPM) {
-                // Apply inverse perspective transform
-                cv::Mat result_ipm;
-                cv::warpPerspective(result, result_ipm, invMatrix, binary_warped.size(), cv::INTER_LINEAR);
-                cv::addWeighted( non_warped, 0.3,result_ipm, 0.95, 0, result);
-            }
-
-            // if (stop_line) {
-            //     cv::putText(result, "Stopline detected!", cv::Point(64, 48), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(255, 255, 255), 1, cv::LINE_AA);
-            // }
-
-            // if (cross_walk) {
-            //     cv::putText(result, "Crosswalk detected!", cv::Point(128, 96), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(255, 255, 255), 1, cv::LINE_AA);
-            // }
-
-            return result;
-        }
-
-        void printTuple(const std::tuple<int, std::vector<double>, std::vector<double>, bool, int, bool>& ret) {
-            std::cout << "Contents of the tuple ret:" << std::endl;
-            std::cout << "number_of_fits: " << std::get<0>(ret) << std::endl;
-
-            std::cout << "left_fit: ";
-            for (const auto& val : std::get<1>(ret)) {
-                std::cout << val << " ";
-            }
-            std::cout << std::endl;
-
-            std::cout << "right_fit: ";
-            for (const auto& val : std::get<2>(ret)) {
-                std::cout << val << " ";
-            }
-            std::cout << std::endl;
-
-            std::cout << "stop_line: " << std::boolalpha << std::get<3>(ret) << std::endl;
-            std::cout << "stop_index: " << std::get<4>(ret) << std::endl;
-            std::cout << "cross_walk: " << std::boolalpha << std::get<5>(ret) << std::endl;
-        }
-
-
+ 
         cv::Mat getIPM(cv::Mat inputImage, bool rev = false) {
             // cv::Mat undistortImage;
             cv::undistort(inputImage, image_cont_1, cameraMatrix, distCoeff);
@@ -372,7 +250,6 @@ class LaneDetectNode_2{
             cv::warpPerspective(image_cont_1, image_cont_2, transMatrix, dest_size, cv::INTER_LINEAR);
             return image_cont_2;
         }
-
 
 
         cv::Mat getLanes(cv::Mat inputImage) {
@@ -425,61 +302,6 @@ class LaneDetectNode_2{
             std::cout << "Before return:" << std::endl;
             return waypoints;
         }
-        void plot_polynomial(const std::vector<double> &a3, const std::vector<double> &a2, const std::vector<double> &a4, const std::vector<int> &yY) {
-            // Create a range of x-values
-            std::vector<int> x_values;
-            std::vector<double> x_2;
-            for (int x = 0; x <= 640; x += 1) {
-                x_values.push_back(x);
-            }
-
-            // Evaluate the polynomial for each x-value
-            std::vector<double> yR_values(x_values.size());
-            std::vector<double> yL_values(x_values.size());
-            for (size_t i = 0; i < x_values.size(); ++i) {
-                yL_values[i] = a3[0] + x_values[i]*a3[1] + a3[2]*(x_values[i])*(x_values[i]);
-                yR_values[i] = a2[0] + x_values[i]*a2[1] + a2[2]*(x_values[i])*(x_values[i]);
-            }
-
-            // Plot the polynomial curve
-                plt::plot(yR_values, x_values,".");
-                plt::plot(yL_values, x_values,".");
-                plt::plot(a4,yY,".");
-                plt::xlabel("x");
-                plt::ylabel("y");
-                plt::ylim(479,0);
-                plt::xlim(0,639);
-                plt::title("Plot of Polynomial");
-                plt::grid(true);
-                plt::show();
-        }
-
-
-        void displayHistogram(const cv::Mat& histogram) {
-            // Convert histogram data to vector for plotting
-            std::vector<int> histData;
-            
-        // Copy the histogram data to a vector
-            for (int i = 0; i < histogram.cols; ++i) {
-                histData.push_back(histogram.at<int>(0, i));
-            }
-            // Print histogram data
-            // std::cout << "Histogram Data: ";
-            // for (int value : histData) {
-            //     std::cout << value << " ";
-            // }
-            // std::cout << std::endl;
-
-            // Plot the histogram
-            plt::plot(histData);
-            // plt::show();
-
-            // Close the plot window after 5 seconds
-            // std::this_thread::sleep_for(std::chrono::seconds(5));
-            // plt::close(); // Close the plot window
-        }
-
-
 
         std::vector<int> find_center_indices(const cv::Mat & histogram, int threshold) { // Find the center indices of potential lane lines
             
@@ -513,31 +335,12 @@ class LaneDetectNode_2{
                 i = j;
             }
 
-            // for (const std::vector<int>& group : consecutive_groups) {
-            //     std::cout << "Consecutive Group:";
-            //     for (int value : group) {
-            //         std::cout << " " << value;
-            //     }
-            //     std::cout << std::endl;
-            // }
-
-            // Iterate over consecutive_groups and find ones that are five continuous pixels or more
             for (const std::vector<int>& group : consecutive_groups) {
                 if (group.size() >= 5) {
                     valid_groups.push_back(group);
                 }
             }
 
-
-            // for (const std::vector<int>& group : valid_groups) {
-            //     std::cout << "Valid Group:";
-            //     for (int value : group) {
-            //         std::cout << " " << value;
-            //     }
-            //     std::cout << std::endl;
-            // }
-
-            // Find the center index for each valid group
             std::vector<int> center_indices;
             for (const auto& group : valid_groups) {
                     int front = group.front();
@@ -552,71 +355,48 @@ class LaneDetectNode_2{
             return center_indices;
         }
 
-        std::tuple<bool, int, int> find_stop_line(const cv::Mat& image, int threshold) { // Function to identify presence of stop line
+        int find_stop_line(const cv::Mat& image, int threshold) { // Function to identify presence of stop line
 
-            // NOTE : CAN BE OPTIMIZED BY COMBINING VERTICAL HISTOGRAM WITH find_center_indices, reduce one histogram computation
-            // Maybe modify the return values to conform with what is needed
+            cv::Mat roi = image(cv::Range::all(), cv::Range(0, 639));
+            cv::reduce(roi/ 2, horistogram, 1, cv::REDUCE_SUM, CV_32S);
+            double min_val, max_val;
+            cv::Point min_loc, max_loc;
+            cv::minMaxLoc(horistogram, &min_val, &max_val, &min_loc, &max_loc);
+            std::cout << "Max loc done :  "<< max_loc << std::endl;
 
-            // Find indices where histogram values are above the threshold
-            std::cout << "Starting reduce "<< std::endl;
-            cv::Mat histogram;
-            cv::reduce(image(cv::Range(0, 480), cv::Range::all()) / 2, histogram, 0, cv::REDUCE_SUM, CV_32S);
-            // std::cout << "Histogram done "<< std::endl;
+            std::vector<double> hist;
+            std::cout << horistogram.rows << std::endl;
+            horistogram = image.row(max_loc.y);
+            for (int i = 0; i < horistogram.cols; ++i) {
+                hist.push_back(static_cast<double>(horistogram.at<uchar>(i)));
+            }
+            std::cout << "Hist size :  "<< hist.size() << std::endl;
+            int sum = 0;
+            for(int i =0; i < hist.size(); i++){
+                // std::cout << "Value is : " << hist[i] << std::endl;
+            }
             
-            std::vector<int> above_threshold;       // Container for values above threshold
-
-            for (int i = 0; i < histogram.cols; ++i) {      // Iterate over histogram values
-                if (histogram.at<int>(0, i) > threshold) {
-                    above_threshold.push_back(i);           // Retain values above threshold
+            for(int i =0; i < hist.size(); i++){        // ADD up nonzero values to see if there are consecutive ones
+                sum+= 1;                                // Consecutive means stop line
+                if(hist[i] < 1){
+                    sum = 0;
+                }
+                else if( sum >= 370){
+                    stop_line = true;
+                    break;
                 }
             }
 
-            // Find consecutive groups of five or more indices
-            std::vector<std::vector<int>> consecutive_groups;       // Container for continuous pixel groups
-
-            for (int i = 0; i < above_threshold.size();) {          // Iterate over pixels above the threshold
-                int j = i;
-                while (j < above_threshold.size() && above_threshold[j] - above_threshold[i] == j - i) {
-                    ++j;
-                }
-                if (j - i >= 5) {
-                    consecutive_groups.push_back(std::vector<int>(above_threshold.begin() + i, above_threshold.begin() + j));       // Retain groups of continuous pixels
-                }
-                i = j;
+            if(stop_line == true){
+                stop_loc = max_loc.y;
+            }
+            else{
+                stop_loc =-1;
             }
 
-            // std::cout << "Consecutive done "<< std::endl;
+            std::cout << "Stop line check done "<< std::endl;
 
-            // Find the maximum index of the horizontal histogram
-            // This is because the stop line will be a section of a lot of white pixels, i.e. the max of the histogram horizontally
-
-            cv::Mat horistogram;
-            cv::reduce(image(cv::Range::all(), cv::Range(0, 640)) / 2, horistogram, 1, cv::REDUCE_SUM, CV_32S);
-            cv::Point max_loc;
-            cv::minMaxLoc(horistogram, nullptr, nullptr, nullptr, &max_loc);
-
-            // std::cout << "Max loc done "<< std::endl;
-
-            // Check to see if there is a sequence of pixels long enough for a stop line
-            bool stop_line = false;
-            int width = 0;
-            // for (const auto& group : consecutive_groups) {  
-            //     if (group.size() >= 370) {                  // NOTE: HARD CODED VALUE for the stop line width
-            //         stop_line = true;
-            //         cv::Mat above_threshold2;
-            //         cv::threshold(horistogram, above_threshold2, 50000, 255, cv::THRESH_BINARY); // causes problems
-            //         std::vector<cv::Point> non_zero_indices;
-            //         cv::findNonZero(above_threshold2, non_zero_indices);
-            //         if (!non_zero_indices.empty()) {
-            //             width = abs(non_zero_indices.back().y - non_zero_indices.front().y);
-            //         }
-            //         break;
-            //     }
-            // }
-
-            // std::cout << "Stop line check done "<< std::endl;
-
-            return std::make_tuple(stop_line, max_loc.y, width);
+            return stop_loc;
         }
 
         bool check_cross_walk(const cv::Mat& image, int stop_index) {
@@ -632,12 +412,14 @@ class LaneDetectNode_2{
             }
         }
 
-        std::vector<int> concatenate(const std::vector<std::vector<int>>& arrays) {
-            std::vector<int> result;
-            for (const auto& array : arrays) {
-                result.insert(result.end(), array.begin(), array.end());
+        std::vector<double> convertToArray(const alglib::real_1d_array& arr) {  // Convert between alglib 1d array and std::vector
+            std::vector<double> vec;        // Declare vector
+            int size = arr.length();        
+            vec.reserve(size);  
+            for (int i = 0; i < size; ++i) {    // Iterate over to to transform
+                vec.push_back(arr[i]);
             }
-            return result;
+            return vec;
         }
 
         std::vector<int> find_closest_pair(const std::vector<int>& indices, int lane_width) {
@@ -668,16 +450,6 @@ class LaneDetectNode_2{
             return result_pair;
         }
 
-        std::vector<double> convertToArray(const alglib::real_1d_array& arr) {  // Convert between alglib 1d array and std::vector
-            std::vector<double> vec;        // Declare vector
-            int size = arr.length();        
-            vec.reserve(size);  
-            for (int i = 0; i < size; ++i) {    // Iterate over to to transform
-                vec.push_back(arr[i]);
-            }
-            return vec;
-        }
-
         std::tuple<int,std::vector<double>, std::vector<double>, bool, int, bool> line_fit_2(cv::Mat binary_warped){
             // Declare variables to be used
             
@@ -688,7 +460,6 @@ class LaneDetectNode_2{
             // displayHistogram(histogram);
             std::cout << "Reduce done "<< std::endl;
             std::cout << "Histogram Data: " << image_cont_1.size() << std::endl;
-            std::tuple<bool, int, int> stop_data = find_stop_line(binary_warped, threshold);    // Get the stop line data
             std::cout << "Stop line done "<< std::endl;
             std::vector<int> indices = find_center_indices(image_cont_1, threshold);               // Get the center indices
             std::cout << "Center indices are:"<< std::endl;
@@ -697,13 +468,7 @@ class LaneDetectNode_2{
             }
             std::cout << ""<< std::endl;
             std::cout << "Center indices done"<< std::endl;
-            stop_line = std::get<0>(stop_data);
-
-            if(stop_line){      // Check crosswalk only if there is a stop line 
-                stop_index = std::get<1>(stop_data);
-                cross_walk = check_cross_walk(binary_warped,stop_index);
-            }
-            // std::cout << "Cross walk done"<< std::endl;
+            
             int size_indices = indices.size();      // Number of lanes detected
 
             if(size_indices == 0){                  // Check to see if lanes detected, if not return
@@ -755,10 +520,6 @@ class LaneDetectNode_2{
 
             }
 
-
-            
-
-
             std::cout << "Left Base : " << leftx_base << std::endl;
             std::cout << "Right Base : " << rightx_base << std::endl;
             std::cout << "NUMBER OF FITS : " << number_of_fits << std::endl;
@@ -770,17 +531,10 @@ class LaneDetectNode_2{
             std::vector<cv::Point> nonzero;
 
             cv::findNonZero(binary_warped, nonzero);    // Find nonzero values in OpenCV point format
-            // std::cout << "Nonzero pixels are:"<< std::endl;
-            // for (cv::Point value_i : nonzero) {
-            //     std::cout << value_i << " ";
-            // }
-            // std::cout << ""<< std::endl;
-            // std::cout << "Found nonzero pixels done"<< std::endl;
 
-            // Separate x and y coordinates of nonzero pixels
             std::vector<int> nonzeroy, nonzerox;
             int bigsize;
-            for (size_t i = 0; i < nonzero.size(); i += 2) { // Increment index by 2
+            for (size_t i = 0; i < nonzero.size(); i += 2) { // Increment index by 2 -- THIS IS THE BOTTLENECK (REDUCE TO INCREASE SPEED)
                 nonzeroy.push_back(nonzero[i].y);
                 nonzerox.push_back(nonzero[i].x);
                 bigsize += 1;
@@ -866,7 +620,6 @@ class LaneDetectNode_2{
 
             }
 
-
             // std::cout << "Loop over windows done"<< std::endl;
             // Declare vectors to contain the pixel coordinates to fit
             std::vector<double> leftx;
@@ -886,14 +639,6 @@ class LaneDetectNode_2{
                     leftx.push_back(nonzerox[idx]);
                     lefty.push_back(nonzeroy[idx]);            
                 }
-            
-                // plt::plot(leftx, lefty,".");
-                // plt::xlabel("x");
-                // plt::ylabel("y");
-                // plt::ylim(479,0);
-                // plt::xlim(0,639);
-                // plt::title("Plot of Polynomial");
-                // plt::grid(true);
                    
                 // Perform polynomial fitting
                 alglib::real_1d_array x_left, y_left;           // Declare alglib array type
@@ -911,8 +656,6 @@ class LaneDetectNode_2{
                 std::cout << "Alglib done"<< std::endl;
             }
 
-            
-
             // std::cout << "left polynomial fit done "<< std::endl;
 
             if (number_of_fits == 3 || number_of_fits == 2) {
@@ -924,14 +667,7 @@ class LaneDetectNode_2{
                     rightx.push_back(nonzerox[idx]);
                     righty.push_back(nonzeroy[idx]);
                 }
-                // plt::xlabel("x");
-                // plt::ylabel("y");
-                // plt::ylim(479,0);
-                // plt::xlim(0,639);
-                // plt::title("Plot of Polynomial");
-                // plt::grid(true);
-                // plt::plot(rightx, righty);
-                // plt::show();
+ 
 
                 // Perform polynomial fitting
                 alglib::real_1d_array x_right, y_right;             // Declare alglib array type
@@ -959,16 +695,6 @@ class LaneDetectNode_2{
 
 };
 
-//------------------------------------------------ LINE FIT PART BEGIN ------------------------------------------------------------------//
-//------------------------------------------------ LINE FIT PART BEGIN ------------------------------------------------------------------//
-//------------------------------------------------ LINE FIT PART BEGIN ------------------------------------------------------------------//
-
-
-//------------------------------------------------ LINE FIT PART END------------------------------------------------------------------//
-//------------------------------------------------ LINE FIT PART END------------------------------------------------------------------//
-//------------------------------------------------ LINE FIT PART END------------------------------------------------------------------//
-
-
 int main(int argc, char *argv[])
 {
     /* code */
@@ -977,22 +703,5 @@ int main(int argc, char *argv[])
     std::cout << "node created";
     ros::NodeHandle nh;
     LaneDetectNode_2 detector(nh);
-    // cv::Mat color_image = cv::imread("/home/nash/Desktop/Simulator/src/LaneDetection/src/lane_image.png", cv::IMREAD_GRAYSCALE); // Remember to update image path
-    // cv::Mat ipm_image = detector.getIPM(color_image);
-    // cv::Mat binary_image = detector.getLanes(ipm_image);
-    // std::cout << "Starting the line fit..."<< std::endl;
-    // std::tuple<int,std::vector<double>, std::vector<double>, bool, int, bool> ret = line_fit_2(binary_image);
-    // detector.printTuple(ret);
-    // std::vector<double> waypoints = detector.getWaypoints(ret,y_Values);
-    // std::cout << "Waypoints are:"<< std::endl;
-    // for (int value : waypoints) {
-    //     std::cout << value << " ";
-    // }
-    // std::cout << ""<< std::endl;
-    // std::vector<double> right_1  = std::get<2>(ret);
-    // std::vector<double> left_1  = std::get<1>(ret);
-    // plot_polynomial(right_1, left_1, waypoints, y_Values);
-    // cv::imshow("Binary Image", binary_image);
-    // cv::waitKey(0);
     return 0;
 }
