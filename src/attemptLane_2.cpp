@@ -512,19 +512,44 @@ class LaneDetectNode_2{
             stop_line = false;
             int stop_loc = -1;
             cv::Mat horistogram;
+            std::vector<double> hist;
             cv::Mat roi = image(cv::Range::all(), cv::Range(0, 639));
             cv::reduce(roi/ 2, horistogram, 1, cv::REDUCE_SUM, CV_32S);
             double min_val, max_val;
             cv::Point min_loc, max_loc;
-            cv::minMaxLoc(horistogram, &min_val, &max_val, &min_loc, &max_loc);
-            std::cout << "Max loc done :  "<< max_loc << std::endl;
+            // cv::minMaxLoc(horistogram, &min_val, &max_val, &min_loc, &max_loc);
+            // std::cout << "Max loc done :  "<< max_loc << std::endl;
+            std::vector<int> above_width_indices;
 
-            std::vector<double> hist;
-            std::cout << horistogram.rows << std::endl;
-            horistogram = image.row(max_loc.y);
             for (int i = 0; i < horistogram.cols; ++i) {
                 hist.push_back(static_cast<double>(horistogram.at<uchar>(i)));
             }
+
+            for (int i = 0; i < hist.size(); ++i) {
+                if (hist[i] >= width) {
+                    above_width_indices.push_back(i);
+                    stop_line = true;
+                }
+            }
+
+            // if(stop_line){
+            //     stop_loc = horistogram.at<int>(0,stop_loc);
+            // }
+            // std::vector<double> x_values(hist.size());
+            // std::iota(x_values.begin(), x_values.end(), 0); // Fill with 0, 1, 2, ..., n-1
+
+            // // Plot the histogram
+            // plt::plot(x_values, hist, "."); // Plot points
+            // plt::xlabel("Column index");
+            // plt::ylabel("Sum of pixel values");
+            // plt::ylim(0, 1000); // Adjust y-axis limits as needed
+            // plt::xlim(0, 639);  // Adjust x-axis limits as needed
+            // plt::title("Horizontal Histogram");
+            // plt::grid(true);
+            // plt::show();
+            // std::cout << horistogram.rows << std::endl;
+            // horistogram = image.row(max_loc.y);
+
             std::cout << "Hist size :  "<< hist.size() << std::endl;
             int sum = 0;
             for(int i =0; i < hist.size(); i++){
@@ -550,7 +575,7 @@ class LaneDetectNode_2{
                 stop_loc =-1;
             }
 
-            std::cout << "Stop line check done "<< std::endl;
+            std::cout << stop_loc <<"Stop line check done "<< std::endl;
 
             return stop_loc;
         }
