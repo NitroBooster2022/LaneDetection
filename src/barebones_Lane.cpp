@@ -146,6 +146,8 @@ class LaneDetectNode_2{
             
             // ROS_INFO("IPM image created");
             image_cont_3 = getLanes(image_cont_2);
+
+            stop_loc = find_stop_line(image_cont_3);
             
             // ROS_INFO("Binary image created");
             
@@ -160,11 +162,15 @@ class LaneDetectNode_2{
             // plot_polynomial(right_1, left_1, waypoints, y_Values);
             // Set dimension label and size
             dimension.label = "#ofwaypoints";
-            dimension.size = 1;
+            dimension.size = 2;
             waypoints_msg.layout.dim.push_back(dimension);
+            
 
             // Populate data array with waypoints
             waypoints_msg.data.push_back(waypoints[5]);
+            waypoints_msg.data.push_back(stop_loc);
+            // waypoints_msg.data.push_back(left_1);            --- If you want to publish the polynomial to display in another node
+            // waypoints_msg.data.push_back(right_1);
 
             // Publish the message
             lane_pub.publish(waypoints_msg);
@@ -355,62 +361,25 @@ class LaneDetectNode_2{
             return center_indices;
         }
 
-        int find_stop_line(const cv::Mat& image, int threshold) { // Function to identify presence of stop line
-
+        int find_stop_line(const cv::Mat& image) { // Function to identify presence of stop line
+            int width = 300;
+            int stop_loc = -1;
+            cv::Mat horistogram;
+            std::vector<int> hist;
             cv::Mat roi = image(cv::Range::all(), cv::Range(0, 639));
-            cv::reduce(roi/ 2, horistogram, 1, cv::REDUCE_SUM, CV_32S);
-            double min_val, max_val;
-            cv::Point min_loc, max_loc;
-            cv::minMaxLoc(horistogram, &min_val, &max_val, &min_loc, &max_loc);
-            std::cout << "Max loc done :  "<< max_loc << std::endl;
+            cv::reduce(roi, horistogram, 1, cv::REDUCE_SUM, CV_32S);
 
-            std::vector<double> hist;
-            std::cout << horistogram.rows << std::endl;
-            horistogram = image.row(max_loc.y);
-            for (int i = 0; i < horistogram.cols; ++i) {
-                hist.push_back(static_cast<double>(horistogram.at<uchar>(i)));
-            }
-            std::cout << "Hist size :  "<< hist.size() << std::endl;
-            int sum = 0;
-            for(int i =0; i < hist.size(); i++){
-                // std::cout << "Value is : " << hist[i] << std::endl;
-            }
-            
-            for(int i =0; i < hist.size(); i++){        // ADD up nonzero values to see if there are consecutive ones
-                sum+= 1;                                // Consecutive means stop line
-                if(hist[i] < 1){
-                    sum = 0;
+            for (int i = 0; i < horistogram.rows; ++i) {
+                hist.push_back(static_cast<int>(horistogram.at<int>(0,i)/255));
+                 if (hist[i] >= width) {
+                    stop_loc = i;
+
                 }
-                else if( sum >= 370){
-                    stop_line = true;
-                    break;
-                }
-            }
 
-            if(stop_line == true){
-                stop_loc = max_loc.y;
             }
-            else{
-                stop_loc =-1;
-            }
-
-            std::cout << "Stop line check done "<< std::endl;
-
             return stop_loc;
         }
 
-        bool check_cross_walk(const cv::Mat& image, int stop_index) {
-            // Compute the density of non-white pixels
-            cv::Mat roi = image(cv::Range(0, stop_index), cv::Range::all());
-            double density = static_cast<double>(cv::countNonZero(roi)) / (roi.rows * roi.cols);
-
-            // Check if the density exceeds the threshold (0.3)
-            if (density > 0.3) {
-                return true;
-            } else {
-                return false;
-            }
-        }
 
         std::vector<double> convertToArray(const alglib::real_1d_array& arr) {  // Convert between alglib 1d array and std::vector
             std::vector<double> vec;        // Declare vector
@@ -534,7 +503,7 @@ class LaneDetectNode_2{
 
             std::vector<int> nonzeroy, nonzerox;
             int bigsize;
-            for (size_t i = 0; i < nonzero.size(); i += 2) { // Increment index by 2 -- THIS IS THE BOTTLENECK (REDUCE TO INCREASE SPEED)
+            for (size_t i = 0; i < nonzero.size(); i += 4) { // Increment index by 2 -- THIS IS THE BOTTLENECK (REDUCE TO INCREASE SPEED)
                 nonzeroy.push_back(nonzero[i].y);
                 nonzerox.push_back(nonzero[i].x);
                 bigsize += 1;

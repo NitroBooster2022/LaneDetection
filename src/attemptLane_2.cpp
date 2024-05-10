@@ -145,7 +145,7 @@ class LaneDetectNode_2{
             ros::Duration elapsed_time = end_time - start_time;
             double elapsed_time_double = elapsed_time.toSec();
             stop_loc = find_stop_line(image_cont_3,threshold_2);
-            cv::Mat gyu_img = viz3(image_cont_1,color_image, ret, waypoints,y_Values, stop_loc, false, elapsed_time_double);
+            cv::Mat gyu_img = viz3(image_cont_1,color_image, ret, waypoints,y_Values, stop_loc, true, elapsed_time_double);
             cv::imshow("Binary Image", gyu_img);
             cv::waitKey(1);
 
@@ -508,74 +508,66 @@ class LaneDetectNode_2{
         }
 
         int find_stop_line(const cv::Mat& image, int threshold) { // Function to identify presence of stop line
-            int width = 370;
+            int width = 300;
             stop_line = false;
             int stop_loc = -1;
             cv::Mat horistogram;
-            std::vector<double> hist;
+            std::vector<int> hist;
             cv::Mat roi = image(cv::Range::all(), cv::Range(0, 639));
-            cv::reduce(roi/ 2, horistogram, 1, cv::REDUCE_SUM, CV_32S);
-            double min_val, max_val;
-            cv::Point min_loc, max_loc;
-            // cv::minMaxLoc(horistogram, &min_val, &max_val, &min_loc, &max_loc);
-            // std::cout << "Max loc done :  "<< max_loc << std::endl;
-            std::vector<int> above_width_indices;
+            cv::reduce(roi, horistogram, 1, cv::REDUCE_SUM, CV_32S);
 
-            for (int i = 0; i < horistogram.cols; ++i) {
-                hist.push_back(static_cast<double>(horistogram.at<uchar>(i)));
-            }
 
-            for (int i = 0; i < hist.size(); ++i) {
-                if (hist[i] >= width) {
-                    above_width_indices.push_back(i);
-                    stop_line = true;
+            for (int i = 0; i < horistogram.rows; ++i) {
+                hist.push_back(static_cast<int>(horistogram.at<int>(0,i)/255));
+                // std::cout << "Index is : " << i << " Value is : " << hist[i] << std::endl;
+                 if (hist[i] >= width) {
+                    // stop_line = true;
+                    stop_loc = i;
+                    // above_width_indices.push_back(i);
+                    // stop_line = true;
+                    // std::cout << "Value is : " << hist[i] << std::endl;
+                    // std::cout << "Index is : " << i << std::endl;
                 }
+
             }
+
+            std::cout << "Size is : " << hist.size() << std::endl;
+
+            // for (int i = 0; i < hist.size(); ++i) {
+            //     if (hist[i] >= width) {
+            //         // above_width_indices.push_back(i);
+            //         // stop_line = true;
+            //         // std::cout << "Value is : " << hist[i] << std::endl;
+            //         // std::cout << "Index is : " << i << std::endl;
+            //     }
+            // }
 
             // if(stop_line){
             //     stop_loc = horistogram.at<int>(0,stop_loc);
             // }
             // std::vector<double> x_values(hist.size());
-            // std::iota(x_values.begin(), x_values.end(), 0); // Fill with 0, 1, 2, ..., n-1
+            // std::iota(hist.begin(),hist.end(),0); // Fill with 0, 1, 2, ..., n-1
 
-            // // Plot the histogram
-            // plt::plot(x_values, hist, "."); // Plot points
+            // // // Plot the histogram
+            // plt::scatter(x_values, hist); // Plot points
             // plt::xlabel("Column index");
             // plt::ylabel("Sum of pixel values");
-            // plt::ylim(0, 1000); // Adjust y-axis limits as needed
-            // plt::xlim(0, 639);  // Adjust x-axis limits as needed
+            // plt::ylim(0, 640); // Adjust y-axis limits as needed
+            // plt::xlim(0, 480);  // Adjust x-axis limits as needed
             // plt::title("Horizontal Histogram");
             // plt::grid(true);
             // plt::show();
-            // std::cout << horistogram.rows << std::endl;
-            // horistogram = image.row(max_loc.y);
+            // // std::cout << horistogram.rows << std::endl;
+            // // horistogram = image.row(max_loc.y);
 
-            std::cout << "Hist size :  "<< hist.size() << std::endl;
-            int sum = 0;
-            for(int i =0; i < hist.size(); i++){
-                // std::cout << "Value is : " << hist[i] << std::endl;
-            }
-            
-            for(int i =0; i < hist.size(); i++){
-                sum+= 1;
-                if(hist[i] < 1){
-                    sum = 0;
-                }
-                else if( sum >= 370){
-                    stop_line = true;
-                    break;
-                }
-            }
-            std::cout << "Total sum :  "<< sum << std::endl;
+            // if(stop_line == true){
+            //     stop_loc = max_loc.y;
+            // }
+            // else{
+            //     stop_loc =-1;
+            // }
 
-            if(stop_line == true){
-                stop_loc = max_loc.y;
-            }
-            else{
-                stop_loc =-1;
-            }
-
-            std::cout << stop_loc <<"Stop line check done "<< std::endl;
+            // std::cout << "STOP LOC -----  "<< stop_loc << std::endl;
 
             return stop_loc;
         }
